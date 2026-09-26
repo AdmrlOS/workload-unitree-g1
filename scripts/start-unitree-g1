@@ -1,0 +1,67 @@
+#!/bin/bash
+# start-unitree-g1 — Admiral ENTRYPOINT (run under tini -g).
+#
+# Admiral's launch contract (docs.admrl.co/core-concepts/configurations)
+# tracks a single root process + its cgroup and restarts the whole workload
+# if that process exits. The vendor Unitree services are SysV daemons that
+# fork-and-detach (start-stop-daemon --background) via their own
+# /etc/init.d/{master_service,ota_pipe} scripts — that's fine, we invoke
+# those scripts as-is (lsb-base is installed so their init-functions sourcing
+# works with no real init system present), but it means nothing about
+# running them blocks in the foreground on its own.
+#
+# So: start ota_pipe + master_service via their init scripts, keep SSH up for
+# diagnostics (same "never let a subsystem failure take down remote access"
+# posture as workload-cuda-debug's start-cuda-debug), and run a foreground
+# watchdog that IS the tracked process — if master_service disappears, the
+# watchdog exits non-zero so Admiral notices the crash and restarts the
+# container per its rollout/health policy, instead of silently running with
+# half the stack dead forever.
+set -uo pipefail
+umask 022
+mkdir -p /run/sshd /var/log/unitree-g1
+
+# Host SSH keys are generated fresh at first start, never baked into the
+# image (same posture as workload-cuda-debug).
+ssh-keygen -A
+/usr/sbin/sshd -t
+/usr/sbin/sshd -D -e &
+SSHD_PID=$!
+echo "unitree-g1: sshd started (pid ${SSHD_PID}), port 22, root or unitree-ssh"
+
+# --- Unitree PC4 stack -------------------------------------------------------
+log() { printf '%s %s\n' "$(date -u --iso-8601=seconds)" "$*" | tee -a /var/log/unitree-g1/boot.log; }
+
+# NOTE: deliberately `>>file 2>&1`, not `| tee`. These init.d scripts
+# background (start-stop-daemon-style) a long-lived daemon that inherits
+# whatever stdout/stderr fd it's launched with. Piping through `tee` here
+# would leave `tee` waiting forever for EOF on a pipe the now-backgrounded
+# daemon still holds open — the entrypoint would hang at container start on
+# every boot. Plain file redirection has no such reader to starve.
+log "starting ota_pipe"
+/etc/init.d/ota_pipe start >>/var/log/unitree-g1/boot.log 2>&1 || log "WARN: ota_pipe start returned non-zero"
+
+log "starting master_service (supervises the Unitree module set via mscli)"
+/etc/init.d/master_service start >>/var/log/unitree-g1/boot.log 2>&1 || log "WARN: master_service start returned non-zero"
+
+sleep 3
+if command -v /unitree/sbin/mscli >/dev/null 2>&1; then
+    /unitree/sbin/mscli listservice >>/var/log/unitree-g1/boot.log 2>&1 || true
+fi
+
+# --- Watchdog: the tracked foreground process --------------------------------
+# Admiral treats this exit as "the workload crashed" — see
+# docs/admiral-mapping.md for how that maps to restart/rollback behavior.
+CHECK_INTERVAL="${UNITREE_WATCHDOG_INTERVAL:-10}"
+log "watchdog: monitoring master_service every ${CHECK_INTERVAL}s"
+while true; do
+    if ! pgrep -x master_service >/dev/null 2>&1; then
+        log "FATAL: master_service is not running — exiting so Admiral restarts the workload"
+        exit 1
+    fi
+    if ! kill -0 "${SSHD_PID}" 2>/dev/null; then
+        log "FATAL: sshd died — exiting so Admiral restarts the workload"
+        exit 1
+    fi
+    sleep "${CHECK_INTERVAL}"
+done

@@ -1,0 +1,77 @@
+#!/bin/bash
+# unitree-g1-status — diagnostic CLI, same role as workload-cuda-debug's
+# `cuda-debug` script: one command to dump everything needed to file a
+# useful bug report or confirm the appliance is healthy after a deploy.
+set -uo pipefail
+
+section() { printf '\n--- %s ---\n' "$*"; }
+
+case "${1:-inspect}" in
+inspect)
+    date -u --iso-8601=seconds
+    uname -a
+    id
+
+    section "Unitree module versions"
+    if [ -f /unitree/robot/pkg/version/version.json ]; then
+        jq . /unitree/robot/pkg/version/version.json 2>/dev/null || cat /unitree/robot/pkg/version/version.json
+    else
+        echo "MISSING /unitree/robot/pkg/version/version.json"
+    fi
+
+    section "mscli listservice"
+    /unitree/sbin/mscli listservice 2>&1 || echo "mscli not available / master_service not responding"
+
+    section "ota_pipe_cli listmoduleversion"
+    /unitree/sbin/ota_pipe_cli -a default -c listmoduleversion 2>&1 || echo "ota_pipe_cli not available"
+
+    section "Runtime library resolution (master_service)"
+    ldd /unitree/module/master_service/master_service 2>&1 | grep -E 'not found|libcrypto|libssl|libddsc' || \
+        ldd /unitree/module/master_service/master_service 2>&1
+
+    section "CycloneDDS runtime"
+    ldconfig -p | grep -i libddsc || echo "libddsc.so.0 NOT in ldconfig cache"
+
+    section "L4T GStreamer hardware plugins"
+    if command -v gst-inspect-1.0 >/dev/null 2>&1; then
+        for elem in nvv4l2h264enc nvvidconv nvjpegenc; do
+            gst-inspect-1.0 "$elem" >/dev/null 2>&1 && echo "OK   $elem" || echo "MISSING $elem"
+        done
+    else
+        echo "gst-inspect-1.0 not installed in this image"
+    fi
+
+    section "Camera device nodes"
+    v4l2-ctl --list-devices 2>&1 || echo "v4l2-ctl unavailable"
+    find /dev -maxdepth 1 -name 'video*' -exec ls -ldn {} + 2>/dev/null || true
+
+    section "Jetson/Tegra device nodes (informational — Admiral owns these)"
+    find /dev -maxdepth 4 \( -name 'nvmap' -o -name 'nvgpu' -o -path '/dev/nvgpu/*' -o -name 'nvhost*' -o -path '/dev/dri/*' \) \
+        -exec ls -ldn {} + 2>/dev/null || true
+
+    section "Network (expects hostNetwork: true — see docs/admiral-mapping.md)"
+    ip -brief addr show 2>&1 || ifconfig 2>&1
+    echo "Expected static IP for this board (set at the Admiral network layer, not by this container): 192.168.123.164/24 on the physical eth0-equivalent NIC"
+    ip route show 2>&1 | grep -i 230.1.1.1 || echo "no explicit route for DDS multicast group 230.1.1.1 (may still work via default multicast handling)"
+
+    section "Memory"
+    free -h
+    ;;
+
+services)
+    /unitree/sbin/mscli listservice
+    ;;
+
+modules)
+    /unitree/sbin/ota_pipe_cli -a default -c listmoduleversion
+    ;;
+
+camera)
+    v4l2-ctl --list-devices
+    ;;
+
+*)
+    echo "Usage: unitree-g1-status [inspect|services|modules|camera]" >&2
+    exit 2
+    ;;
+esac

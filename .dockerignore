@@ -1,0 +1,6 @@
+.git
+.gitignore
+docs/
+capture/README.md
+capture/capture-unitree-g1.sh
+capture/MANIFEST.txt

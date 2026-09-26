@@ -1,0 +1,24 @@
+Port 22
+ListenAddress 0.0.0.0
+ListenAddress ::
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+PermitRootLogin prohibit-password
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+UsePAM yes
+AllowUsers root unitree-ssh
+AuthorizedKeysFile .ssh/authorized_keys
+StrictModes yes
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding yes
+PermitTunnel no
+PrintMotd yes
+PrintLastLog yes
+UseDNS no
+LogLevel VERBOSE
+Subsystem sftp internal-sftp

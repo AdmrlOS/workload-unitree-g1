@@ -1,0 +1,5 @@
+capture/unitree-g1-rootfs.tar.zst
+capture/MANIFEST.txt
+*.tar.zst
+*.tar.gz
+.DS_Store

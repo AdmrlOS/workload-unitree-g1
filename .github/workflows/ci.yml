@@ -1,0 +1,115 @@
+name: CI
+
+# Validates the Dockerfile mechanically on every push/PR using a synthetic
+# fake capture tarball — the same one used to develop this repo locally.
+# This deliberately never touches real Unitree binaries or any secret, so
+# it runs on every PR with no configuration. It catches build-breaking
+# regressions (missing packages, bad COPY paths, the tee/pipe deadlock
+# class of bug, CycloneDDS SONAME drift, etc.) but proves nothing about
+# whether the real captured stack actually works — see
+# .github/workflows/publish.yml and docs/admiral-mapping.md's risk list
+# for what still needs real hardware.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck entrypoint + capture scripts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck scripts/start-unitree-g1 scripts/unitree-g1-status capture/capture-unitree-g1.sh
+
+  smoke-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: synthesize a fake capture tarball (no real Unitree binaries)
+        run: |
+          set -euo pipefail
+          root=/tmp/fake-unitree
+          mkdir -p "$root/unitree/module/master_service" \
+                   "$root/unitree/sbin" \
+                   "$root/unitree/robot/pkg/version" \
+                   "$root/etc/init.d"
+
+          cat > "$root/unitree/module/master_service/master_service" <<'EOF'
+          #!/bin/bash
+          echo "fake master_service running"
+          sleep infinity
+          EOF
+
+          cat > "$root/unitree/sbin/mscli" <<'EOF'
+          #!/bin/bash
+          echo "fake mscli: $*"
+          EOF
+          cp "$root/unitree/sbin/mscli" "$root/unitree/sbin/ota_pipe_cli"
+
+          echo '{"Module":"fake"}' > "$root/unitree/robot/pkg/version/version.json"
+
+          cat > "$root/etc/init.d/master_service" <<'EOF'
+          #!/bin/bash
+          case "$1" in
+            start) /unitree/module/master_service/master_service & ;;
+            *) echo usage ;;
+          esac
+          EOF
+
+          cat > "$root/etc/init.d/ota_pipe" <<'EOF'
+          #!/bin/bash
+          echo "fake ota_pipe $1"
+          EOF
+
+          chmod +x "$root/unitree/module/master_service/master_service" \
+                   "$root/unitree/sbin/mscli" "$root/unitree/sbin/ota_pipe_cli" \
+                   "$root/etc/init.d/master_service" "$root/etc/init.d/ota_pipe"
+
+          tar --create -C "$root" unitree etc/init.d/master_service etc/init.d/ota_pipe \
+            | zstd -q -o capture/unitree-g1-rootfs.tar.zst
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: build (arm64, not pushed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: false
+          load: true
+          tags: unitree-g1-ci-smoke:latest
+
+      - name: run + verify entrypoint / watchdog behavior
+        run: |
+          set -euo pipefail
+          docker run -d --name smoke --platform linux/arm64 unitree-g1-ci-smoke:latest
+          sleep 6
+          echo "--- ps ---"
+          docker exec smoke ps -eo pid,ppid,stat,comm
+          echo "--- boot.log ---"
+          docker exec smoke cat /var/log/unitree-g1/boot.log
+          echo "--- unitree-g1-status inspect ---"
+          docker exec smoke unitree-g1-status inspect
+
+          echo "--- crash-detection watchdog: kill master_service, expect exit 1 ---"
+          docker exec smoke pkill -f 'module/master_service/master_service'
+          sleep 12
+          status="$(docker inspect smoke --format '{{.State.Status}}')"
+          exitcode="$(docker inspect smoke --format '{{.State.ExitCode}}')"
+          echo "status=${status} exitcode=${exitcode}"
+          docker rm -f smoke >/dev/null 2>&1 || true
+          if [ "$status" != "exited" ] || [ "$exitcode" != "1" ]; then
+            echo "FATAL: watchdog did not crash the container as expected" >&2
+            exit 1
+          fi
