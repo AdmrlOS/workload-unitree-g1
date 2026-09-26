@@ -1,5 +1,8 @@
 capture/unitree-g1-rootfs.tar.zst
 capture/MANIFEST.txt
+artifacts/
+Upks for unitree_jetpack */
 *.tar.zst
 *.tar.gz
 .DS_Store
+__pycache__/

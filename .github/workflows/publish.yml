@@ -1,76 +1,36 @@
-name: Publish (private)
-
-# Builds the real image (captured Unitree binaries + pinned runtime deps)
-# and pushes it to GHCR under this (private) repo/org. Requires the real
-# capture tarball produced by capture/capture-unitree-g1.sh on real
-# hardware — see capture/README.md and docs/provenance.md. That tarball
-# NEVER lives in git; it's fetched at build time from wherever you've
-# privately stored it (your own artifact store / private release / bucket),
-# pinned by URL + sha256 the same way every other artifact in the
-# Dockerfile is pinned.
-#
-# Required repository/organization secrets (Settings > Secrets and
-# variables > Actions):
-#   UNITREE_CAPTURE_URL      https:// URL to the real unitree-g1-rootfs.tar.zst
-#   UNITREE_CAPTURE_SHA256   its sha256 (see capture/MANIFEST.txt from the
-#                             capture run that produced it)
-#
-# Until those are configured, this workflow fails fast with a clear message
-# rather than silently pushing a broken or fake image.
+name: Publish private image
 
 on:
   push:
-    branches: ["main"]
-    tags: ["v*"]
-  workflow_dispatch: {}
-
-env:
-  REGISTRY: ghcr.io
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  build-and-push:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Official Unitree bootstrap + public community UPKs are SHA256 pinned
+      # in fetch-unitree-assets.py and independently checked in Dockerfile.
+      # The downloaded binaries remain out of git and this repo is private.
+      - name: Download and verify vendor artifacts
+        run: python3 scripts/fetch-unitree-assets.py
 
-      - name: require capture secrets
-        run: |
-          if [ -z "${{ secrets.UNITREE_CAPTURE_URL }}" ] || [ -z "${{ secrets.UNITREE_CAPTURE_SHA256 }}" ]; then
-            echo "::error::UNITREE_CAPTURE_URL / UNITREE_CAPTURE_SHA256 secrets are not set." >&2
-            echo "Run capture/capture-unitree-g1.sh on real hardware, store the" >&2
-            echo "resulting tarball somewhere private, and set these repo/org secrets." >&2
-            echo "See capture/README.md and this workflow's header comment." >&2
-            exit 1
-          fi
-
-      - name: fetch the real capture tarball (pinned URL + sha256, like every other build artifact)
-        env:
-          CAPTURE_URL: ${{ secrets.UNITREE_CAPTURE_URL }}
-          CAPTURE_SHA256: ${{ secrets.UNITREE_CAPTURE_SHA256 }}
-        run: |
-          set -euo pipefail
-          curl -fSL --retry 5 "${CAPTURE_URL}" -o capture/unitree-g1-rootfs.tar.zst
-          echo "${CAPTURE_SHA256}  capture/unitree-g1-rootfs.tar.zst" | sha256sum -c -
-
-      - name: lowercase image name (GHCR requires it)
+      - name: Image name
         id: image
-        run: echo "name=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
-        env:
-          REGISTRY: ${{ env.REGISTRY }}
-
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-
       - uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - uses: docker/metadata-action@v5
         id: meta
         with:
@@ -79,8 +39,8 @@ jobs:
             type=sha,format=long
             type=ref,event=branch
             type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
-
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -88,7 +48,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: remove the fetched tarball from the runner
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Remove downloaded packages
         if: always()
-        run: rm -f capture/unitree-g1-rootfs.tar.zst
+        run: rm -rf artifacts

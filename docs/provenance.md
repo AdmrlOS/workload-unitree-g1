@@ -1,95 +1,56 @@
-# Where the Unitree binaries actually come from
+# Binary provenance and inspected UPKs
 
-Short answer: **the base install bundle is Unitree's own public, official
-recovery instructions** — not something reverse-engineered or sniffed off
-the wire. The camera/patch *module* packages (`unitree_patch_pc4`,
-`video_hub_pc4`) are a separate, murkier story. Sleuthing trail below.
+## Unitree's base ZIP
 
-## The base bootstrap (`g1plus_pc4_unitree_install.zip`)
+[Unitree's G1 developer FAQ](https://support.unitree.com/home/en/G1_developer/FAQ)
+links a public [NX patch ZIP](https://oss-global-cdn.unitree.com/static/ad3297c5c9bb40368c3e0c9febefa375.zip),
+`g1plus_pc4_unitree_install.zip`, SHA256
+`9bb545ba6b90d4477843044c780d4646fb8a543467082ae910fc83d598962765`.
+It includes `/unitree/module/master_service/master_service`,
+`/unitree/ota/pipe/ota_pipe_service`, `/unitree/sbin/{mscli,ota_pipe_cli}`,
+`/etc/init.d/{master_service,ota_pipe}`, module metadata and config. These
+are AArch64 ELF binaries; `master_service` needs `libcrypto.so.1.1`.
+The original `install` script installs SysV services via `update-rc.d` and
+calls `systemctl daemon-reload`. The OCI image stages its files and runs
+those services via a tiny entrypoint instead of running systemd.
 
-`legion1581/unitree-jetpack`'s `versions/*/version.env` pins:
+## Community PC4 UPKs supplied in this repo's ignored directory
 
-```
-UNITREE_INSTALL_URL="https://oss-global-cdn.unitree.com/static/ad3297c5c9bb40368c3e0c9febefa375.zip"
-```
+The [unitree-jetpack instructions](https://github.com/legion1581/unitree-jetpack/blob/g1/docs/unitree-stack.md)
+link [this public Yandex share](https://disk.yandex.com/d/hDJ2DQMlDnoB2g).
+The user's copies live locally under `Upks for unitree_jetpack `; neither
+the UPKs nor decrypted binaries are added to git. Two files are selected:
 
-That exact hash-named URL appears **verbatim** in Unitree's own official
-developer FAQ:
+| Module | File in share | SHA256 |
+|---|---|---|
+| Patch 1.0.0.6 for Ubuntu 24.04 | `7.2-noble/unitree_patch_pc4_1.0.0.6-g1jp-noble.upk` | `33c08e002fce0273b729bd24706614aa2221cef5481dc7d8a2ff6c0d344f605d` |
+| Video hub 1.0.1.1 | `common/video_hub_pc4_1.0.1.1-g1jp.upk` | `de8b0815297bf5556b6fd7b2bed58d8a229f608b4227c1908bdebe48dbe23ea9` |
 
-- **Canonical source:** [support.unitree.com/home/en/G1_developer/FAQ](https://support.unitree.com/home/en/G1_developer/FAQ)
-  (served from `doc-cdn.unitree.com`), under the heading *"Regarding the
-  issue of the Go interface being unable to preview video streams for depth
-  cameras connected to the NX development board EDU+ device"* — i.e. this
-  is Unitree's **official fix for exactly the camera/video_hub problem this
-  workload cares about**, published for any G1 EDU+ developer to use.
-- The FAQ gives the identical procedure `unitree-jetpack`'s
-  `70-rootfs-unitree-base.sh` patch automates: scp the zip to
-  `unitree@192.168.123.164`, `unzip`, `rm -rf /unitree`, run `./install`,
-  verify with `ps -ef | grep master_service`.
-- **Independently corroborated** — the same URL/hash shows up verbatim in
-  at least four unrelated repos that mirror or translate Unitree's official
-  docs, found via GitHub code search:
-  - [`MoissanClub/g1-docs`](https://github.com/MoissanClub/g1-docs) — "AI
-    agent friendly offline docs for Unitree G1. Copyright Unitree"
-  - [`Orboh/g1-handbook-jp`](https://github.com/Orboh/g1-handbook-jp) —
-    Japanese translation of Unitree's G1 SDK Development Guide
-  - [`maxtlee/HumanoidSeatAssembly`](https://github.com/maxtlee/HumanoidSeatAssembly) —
-    unrelated robotics project, docs snapshot for reference
-  - [`zh-plus/unitree-g1-dev-copilot`](https://github.com/zh-plus/unitree-g1-dev-copilot) —
-    an AI coding-assistant "skill" bundling the same FAQ as grounding docs
+They are Unitree `UTPK` containers: a 112-byte header naming the package,
+`TEA\0` marker, and encrypted tar payload with an MD5 **checksum**. The
+header's checksum is not a signature/authentication mechanism; the pinned
+whole-file SHA256 is used to ensure we build from the specific inspected
+artifacts. `scripts/unpack-upk.py` implements the format using Python's
+standard library, based on the key schedule documented by
+[attify's UTPK parser](https://github.com/attify/firmware-analysis-toolkit/blob/14bb33554cdd996a96d3ef252ab0986e3d67765c/crates/fat_package/src/unitree_upk.rs)
+and [UniTEABag](https://github.com/Bin4ry/UniTEABag). It checks that the
+archive's files correspond to the declared *module.json* file list and
+only copies the declared payload, never runs install commands from it.
 
-Four independently-maintained mirrors of Unitree's own documentation citing
-the identical CDN hash is about as strong a confirmation as you get without
-Unitree explicitly saying so on the record: **this zip is Unitree's own
-public support artifact**, not proprietary leaked material.
+**What's in the video UPK:** `videohub_pc4` AArch64 executable,
+`start_videohub.sh` with a D435i camera warmup loop, a CycloneDDS XML
+binding to `eth0`, a master_service service JSON, the real
+`libddsc.so.0` (~7.6 MB), and a udev rule for `/dev/rlsen0`. The embedded
+pipeline uses `v4l2src` and NVIDIA `nvvidconv`/`nvv4l2h264enc`/`nvjpegenc`;
+H.264 also goes to `230.1.1.1:1720`.
 
-That said — it is still Unitree's copyrighted binary distribution, hosted
-on Unitree's own infrastructure. This repo does **not** re-fetch it from
-that URL and does **not** redistribute it; `capture/capture-unitree-g1.sh`
-only snapshots it off a board where *you* legitimately installed it
-following Unitree's own instructions. See `capture/README.md`.
+**What's in the Noble patch UPK:** updated CLI and OTA files, supervisor
+config and a chrony setup script/service. One upstream `module.json`
+FileList byte-count is stale: `chrony_setup.sh` is **1998 bytes** in this
+specific pinned archive but its metadata says **1629**. The unpacker
+permits only this known exception; the entire UPK is still SHA256 checked.
 
-## The module packages (`unitree_patch_pc4`, `video_hub_pc4` — the actual camera code)
-
-This is the part that's genuinely murkier. The same official FAQ entry ends
-with:
-
-> *"After completing the above steps, contact technical support to: Update
-> the Patch PC4 and Video Hub PC4 components to the latest versions."*
-
-Unitree does **not** publish `unitree_patch_pc4_*.upk` or
-`video_hub_pc4_*.upk` at a public URL anywhere in that FAQ — official
-channel is "contact support." `legion1581/unitree-jetpack`'s own
-`docs/unitree-stack.md` instead points users at a **third-party Yandex Disk
-mirror** for these `.upk` files:
-
-```
-https://disk.yandex.com/d/hDJ2DQMlDnoB2g
-```
-
-That's a community re-hosting, not an Unitree URL — presumably populated by
-someone in the community who got the packages through the official support
-channel (or extracted them off a shipped robot) and shared them forward.
-We have no independent corroboration of that mirror's provenance the way
-the base-install zip has four independent citations, and this repo does
-**not** link to or fetch from it.
-
-**This is exactly why `workload-unitree-g1` is a capture build and not a
-"just re-fetch these URLs" Dockerfile**: the base install is confidently
-sourceable from Unitree's own docs, but the actual camera-streaming module
-is only reliably available by pulling it off hardware you already have
-legitimate access to — which is what `capture-unitree-g1.sh` does. It's the
-same posture the community itself has already converged on.
-
-## Everything else in this Dockerfile, for comparison
-
-- **WiFi driver** (`rtl8852bu-dkms_*.deb`) — same official FAQ page, a
-  different `doc-cdn.unitree.com` hash-named zip, separate entry. Not used
-  by this workload (no WiFi dependency here) but confirms the pattern: NX
-  board driver blobs Unitree does publish, they publish through this same
-  FAQ mechanism.
-- **`nvidia-l4t-gstreamer` and friends** — NVIDIA's own public Jetson apt
-  repository (`repo.download.nvidia.com/jetson/...`), no provenance
-  question at all; standard NVIDIA distribution infrastructure.
-- **CycloneDDS, OpenSSL 1.1** — upstream open source / Ubuntu archive,
-  built or fetched by us directly, not from Unitree or legion1581 at all.
+The module packages are provided by a community mirror, not Unitree's
+official FAQ (which says contact support for newer Patch/Video Hub PC4).
+The GitHub repository and GHCR image are private. On-device capture
+(`capture/README.md`) can later compare these files against a real G1.

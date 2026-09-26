@@ -4,3 +4,6 @@ docs/
 capture/README.md
 capture/capture-unitree-g1.sh
 capture/MANIFEST.txt
+Upks for unitree_jetpack */
+capture/unitree-g1-rootfs.tar.zst
+**/__pycache__/

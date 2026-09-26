@@ -42,7 +42,13 @@ inspect)
     fi
 
     section "Camera device nodes"
-    v4l2-ctl --list-devices 2>&1 || echo "v4l2-ctl unavailable"
+    if [ -e /dev/rlsen0 ]; then
+        ls -l /dev/rlsen0
+        readlink -f /dev/rlsen0
+    else
+        echo "MISSING /dev/rlsen0: host BSP udev rule (docs/bsp-handoff.md)"
+    fi
+    v4l2-ctl --list-devices 2>&1 || echo "no V4L2 camera detected"
     find /dev -maxdepth 1 -name 'video*' -exec ls -ldn {} + 2>/dev/null || true
 
     section "Jetson/Tegra device nodes (informational — Admiral owns these)"

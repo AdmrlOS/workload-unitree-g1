@@ -32,6 +32,12 @@ echo "unitree-g1: sshd started (pid ${SSHD_PID}), port 22, root or unitree-ssh"
 # --- Unitree PC4 stack -------------------------------------------------------
 log() { printf '%s %s\n' "$(date -u --iso-8601=seconds)" "$*" | tee -a /var/log/unitree-g1/boot.log; }
 
+# The D435i udev rule belongs in the Admiral BSP. The container sees the
+# host /dev, but rules in its own rootfs are not read by the host daemon.
+if [[ ! -e /dev/rlsen0 ]]; then
+    log "Camera /dev/rlsen0 absent: install the host udev rule in docs/bsp-handoff.md; video_hub_pc4 cannot stream yet"
+fi
+
 # NOTE: deliberately `>>file 2>&1`, not `| tee`. These init.d scripts
 # background (start-stop-daemon-style) a long-lived daemon that inherits
 # whatever stdout/stderr fd it's launched with. Piping through `tee` here

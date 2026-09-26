@@ -1,18 +1,14 @@
 #!/bin/bash
-# capture-unitree-g1.sh — run this ON the Unitree G1 user-workload Jetson
-# (Orin NX) AFTER flashing it with legion1581/unitree-jetpack (g1 branch,
-# -j 7.2) and AFTER installing the unitree_patch + video_hub modules via the
-# OTA uploader (http://192.168.123.164:8888/), per that repo's
-# docs/unitree-stack.md. It snapshots exactly the subtree the Admiral
-# workload-unitree-g1 Dockerfile needs, so the image is a faithful capture
-# of a known-good running board rather than a reimplementation from guesses.
+# capture-unitree-g1.sh — optional comparison snapshot from a working G1.
+# Run this ON the G1 user-workload Jetson after installing the PC4 modules
+# to compare against the package-built OCI image. This output is NOT used
+# by the current Dockerfile (which builds without a board).
 #
-# Output (copy both back to this repo's capture/ directory on your build
-# host, next to the Dockerfile):
+# Output (copy both back to a private workspace for comparison):
 #   unitree-g1-rootfs.tar.zst   — /unitree + the two init.d scripts
 #   MANIFEST.txt                — provenance: versions, dpkg -l, mscli/ota_pipe
 #                                 state, sha256 of the tarball, for the
-#                                 build-time image LABEL/audit trail
+#                                 comparison against the OCI image
 #
 # Usage (on the robot, as root, over the wired 192.168.123.164 SSH or serial
 # console — see legion1581/unitree-jetpack docs/tips.md for the UART header):
@@ -84,5 +80,4 @@ echo "Capture complete:"
 echo "  ${TARBALL}"
 echo "  ${MANIFEST}"
 echo
-echo "Copy both to the build host's capture/ directory (next to Dockerfile), then:"
-echo "  docker buildx build --platform linux/arm64 -t <you>/workload-unitree-g1:<version> ."
+echo "Compare this snapshot to the image assembled from the pinned ZIP/UPKs."
