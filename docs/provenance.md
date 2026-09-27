@@ -12,7 +12,9 @@ It includes `/unitree/module/master_service/master_service`,
 are AArch64 ELF binaries; `master_service` needs `libcrypto.so.1.1`.
 The original `install` script installs SysV services via `update-rc.d` and
 calls `systemctl daemon-reload`. The OCI image stages its files and runs
-those services via a tiny entrypoint instead of running systemd.
+the retained service manager via a tiny entrypoint instead of running systemd.
+The final image strips the OTA executable/CLI/configuration and its update hooks;
+the list above describes the source archive, not the deployed component set.
 
 ## Community PC4 UPKs supplied in this repo's ignored directory
 
@@ -54,3 +56,48 @@ The module packages are provided by a community mirror, not Unitree's
 official FAQ (which says contact support for newer Patch/Video Hub PC4).
 The GitHub repository and GHCR image are private. On-device capture
 (`capture/README.md`) can later compare these files against a real G1.
+
+## Admiral Clean slate adaptation (2026-09-27)
+
+The deployed rootfs now uses Ubuntu **26.04**, pinned in `Dockerfile` to the
+official OCI index digest
+`sha256:da6fc2be547864451aa253836dd926da33623312df4a9a243e35dc877c378a78`.
+The community **Noble** patch is retained as the pinned source of the vendor
+binaries/configuration; its name is not the target Ubuntu version. Its chrony
+installer is not executed. ARM64 startup and loader tests validate the migrated
+userspace, with hardware acceptance tracked separately.
+
+`config/nvidia-packages.json` is the authoritative NVIDIA application-package
+lock: R39.2.1 GStreamer, multimedia, multimedia-utils, NvSci, Ada runtime,
+selected core multimedia helpers, and the nvJPEG/CUDA runtime dependencies.
+The SHA256 values come from NVIDIA's official
+[common package index](https://repo.download.nvidia.com/jetson/common/dists/r39.2/main/binary-arm64/Packages.gz)
+and [Orin SOM package index](https://repo.download.nvidia.com/jetson/som/dists/r39.2/main/binary-arm64/Packages.gz).
+These packages are available separately; a full BSP tarball is unnecessary.
+CUDA 13.2 packages in the Jetson index use the `targets/sbsa-linux` archive
+layout. Only their runtime libraries are copied, not driver/development packages.
+
+`stage-nvidia.py` checks hashes and Debian package identity, extracts into a
+staging directory, then copies an explicit userspace subset plus package
+licenses. It never executes NVIDIA package scripts. The three required
+GStreamer plugins are selected, excluding unrelated CSI/Argus/SIPL plugins.
+The NVIDIA V4L2 dispatcher is selected through the loader configuration.
+
+Local modifications remove the entire runtime OTA path (service, CLI, update
+payloads, live and backup configuration, and startup hooks), replace camera
+startup with our supervisor wrapper, and retain the original udev rule as
+provenance instead of installing it as a host rule. Build-only UPK extraction
+tools are not copied to the final image.
+Module metadata continues to record the original module versions; the OCI
+image version and repository revision identify these adaptations.
+
+`tests/nvidia-driver-packages.json` locks four driver-containing packages for
+**test fixtures only**. `tests/stage-driver.py` selects the 25 libraries from
+Admiral's inspected driver manifest and mounts them in a disposable container
+to exercise actual plugin loading. Those fixture files are excluded from the
+build context and never copied into the released rootfs.
+
+The inherited OpenSSL 1.1 dependency is a pinned legacy compatibility package.
+It is not a supported replacement for Ubuntu's OpenSSL 3 or evidence that the
+closed Unitree binaries receive current security fixes. Keep its provenance
+visible and seek a vendor rebuild when updating the stock module set.

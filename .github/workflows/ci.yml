@@ -1,59 +1,54 @@
-name: CI
+name: Build Clean slate
 
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      publish:
+        type: boolean
+        default: false
+
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Build for the robot architecture natively; no QEMU or runtime tests.
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@v4
-      - name: Check scripts
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq shellcheck
-          shellcheck scripts/start-unitree-g1 scripts/unitree-g1-status capture/capture-unitree-g1.sh
-          python3 -m py_compile scripts/*.py
-
-      - name: Download pinned public inputs
+      - name: Download pinned Unitree inputs
         run: python3 scripts/fetch-unitree-assets.py
-
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - name: Build real arm64 image (CI does not publish)
+      - name: Image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=ref,event=tag
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+      - uses: docker/login-action@v3
+        if: inputs.publish
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and optionally publish arm64 image
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/arm64
-          push: false
-          load: true
-          tags: unitree-g1-ci:local
+          push: ${{ inputs.publish || false }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Verify installed modules and service startup without a robot
-        run: |
-          set -euo pipefail
-          docker run --platform linux/arm64 -d --name smoke unitree-g1-ci:local
-          trap 'docker logs smoke || true; docker rm -f smoke >/dev/null 2>&1 || true' EXIT
-          # QEMU can take a while to create SSH host keys and start services.
-          for i in $(seq 1 90); do
-            if docker exec smoke /etc/init.d/master_service status >/dev/null 2>&1 && \
-               docker exec smoke /etc/init.d/ota_pipe status >/dev/null 2>&1; then break; fi
-            sleep 2
-          done
-          docker exec smoke /etc/init.d/master_service status
-          docker exec smoke /etc/init.d/ota_pipe status
-          docker exec smoke jq -e '.Module.unitree_patch_pc4=="1.0.0.6" and .Module.video_hub_pc4=="1.0.1.1"' \
-            /unitree/robot/pkg/version/version.json
-          docker exec smoke /bin/sh -c 'ldd /unitree/module/video_hub_pc4/videohub_pc4 | grep -q "libddsc.so.0 => /"'
-          docker exec smoke /bin/sh -c 'test ! -e /etc/udev/rules.d/70-unitree-realsense-rlsen0.rules'
-          docker exec smoke /unitree/sbin/mscli listservice
-          # No D435i or NVIDIA multimedia engines on CI: we do not assert
-          # actual camera streaming or accelerated GStreamer availability.

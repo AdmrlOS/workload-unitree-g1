@@ -20,10 +20,7 @@ inspect)
     fi
 
     section "mscli listservice"
-    /unitree/sbin/mscli listservice 2>&1 || echo "mscli not available / master_service not responding"
-
-    section "ota_pipe_cli listmoduleversion"
-    /unitree/sbin/ota_pipe_cli -a default -c listmoduleversion 2>&1 || echo "ota_pipe_cli not available"
+    timeout 10 /unitree/sbin/mscli listservice 2>&1 || echo "mscli not available / master_service not responding"
 
     section "Runtime library resolution (master_service)"
     ldd /unitree/module/master_service/master_service 2>&1 | grep -E 'not found|libcrypto|libssl|libddsc' || \
@@ -41,12 +38,14 @@ inspect)
         echo "gst-inspect-1.0 not installed in this image"
     fi
 
+    section "Camera supervisor"
+    cat /run/unitree-g1/camera.json 2>/dev/null || true
     section "Camera device nodes"
     if [ -e /dev/rlsen0 ]; then
         ls -l /dev/rlsen0
         readlink -f /dev/rlsen0
     else
-        echo "MISSING /dev/rlsen0: host BSP udev rule (docs/bsp-handoff.md)"
+        echo "MISSING /dev/rlsen0: check workload camera discovery and BSP USB/UVC support"
     fi
     v4l2-ctl --list-devices 2>&1 || echo "no V4L2 camera detected"
     find /dev -maxdepth 1 -name 'video*' -exec ls -ldn {} + 2>/dev/null || true
@@ -58,18 +57,27 @@ inspect)
     section "Network (expects hostNetwork: true — see docs/admiral-mapping.md)"
     ip -brief addr show 2>&1 || ifconfig 2>&1
     echo "Expected static IP for this board (set at the Admiral network layer, not by this container): 192.168.123.164/24 on the physical eth0-equivalent NIC"
-    ip route show 2>&1 | grep -i 230.1.1.1 || echo "no explicit route for DDS multicast group 230.1.1.1 (may still work via default multicast handling)"
+    ip route show 2>&1 | grep -i 230.1.1.1 || echo "no explicit route for video multicast group 230.1.1.1 (may still work via default multicast handling)"
 
     section "Memory"
     free -h
     ;;
 
+check)
+    exec /usr/local/bin/unitree-g1-check.py ready
+    ;;
+
+platform)
+    exec /usr/local/bin/unitree-g1-check.py platform
+    ;;
+
 services)
-    /unitree/sbin/mscli listservice
+    timeout 10 /unitree/sbin/mscli listservice
     ;;
 
 modules)
-    /unitree/sbin/ota_pipe_cli -a default -c listmoduleversion
+    # Build-time provenance, not a live module updater query.
+    jq . /unitree/robot/pkg/version/version.json
     ;;
 
 camera)
@@ -77,7 +85,7 @@ camera)
     ;;
 
 *)
-    echo "Usage: unitree-g1-status [inspect|services|modules|camera]" >&2
+    echo "Usage: unitree-g1-status [inspect|check|platform|services|modules|camera]" >&2
     exit 2
     ;;
 esac

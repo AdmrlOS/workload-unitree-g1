@@ -1,0 +1,53 @@
+{
+  "l4t_version": "39.2.1",
+  "packages": [
+    {
+      "name": "nvidia-l4t-gstreamer",
+      "url": "https://repo.download.nvidia.com/jetson/common/pool/main/n/nvidia-l4t-gstreamer/nvidia-l4t-gstreamer_39.2.1-20260806224157_arm64.deb",
+      "sha256": "5101937ba4df642e2a054b5bc87ff6155703fee21ad1c85c134d6cf2b02b6f33",
+      "version": "39.2.1-20260806224157"
+    },
+    {
+      "name": "nvidia-l4t-adaruntime",
+      "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-adaruntime/nvidia-l4t-adaruntime_39.2.1-20260806224157_arm64.deb",
+      "sha256": "df5c996d980e6383eb2c4e545fb923d4153f7e4af19a4fd022a9cfa7cc1c253e",
+      "version": "39.2.1-20260806224157"
+    },
+    {
+      "name": "nvidia-l4t-multimedia",
+      "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-multimedia/nvidia-l4t-multimedia_39.2.1-20260806224157_arm64.deb",
+      "sha256": "5f070f28008ff59a9f948dd8b0b7f6cc864285a595864043eb682efce913f7ca",
+      "version": "39.2.1-20260806224157"
+    },
+    {
+      "name": "nvidia-l4t-multimedia-utils",
+      "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-multimedia-utils/nvidia-l4t-multimedia-utils_39.2.1-20260806224157_arm64.deb",
+      "sha256": "71bad758d12a486ac55f5c5cc12b1f908b88111b7695837ae3b76c682e97222d",
+      "version": "39.2.1-20260806224157"
+    },
+    {
+      "name": "nvidia-l4t-nvsci",
+      "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-nvsci/nvidia-l4t-nvsci_39.2.1-20260806224157_arm64.deb",
+      "sha256": "7dc851490b23a4bba340786ee9b2fc51793c6c6bcdeca2fe0add5cadc0307423",
+      "version": "39.2.1-20260806224157"
+    },
+    {
+      "name": "nvidia-l4t-core",
+      "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-core/nvidia-l4t-core_39.2.1-20260806224157_arm64.deb",
+      "sha256": "277a6fb25f2c06cc2dee6d352bef3abb15929739f396fea1cee70d1dea83008b",
+      "version": "39.2.1-20260806224157"
+    },
+    {
+      "name": "cuda-cudart-13-2",
+      "url": "https://repo.download.nvidia.com/jetson/common/pool/main/c/cuda-cudart/cuda-cudart-13-2_13.2.86-1_arm64.deb",
+      "sha256": "550a1c3c915637b5c0d6538b9eba87471742c4be854438ab8a050caabdea8001",
+      "version": "13.2.86-1"
+    },
+    {
+      "name": "libnvjpeg-13-2",
+      "url": "https://repo.download.nvidia.com/jetson/common/pool/main/libn/libnvjpeg/libnvjpeg-13-2_13.1.0.59-1_arm64.deb",
+      "sha256": "bcc60671b0a0ae7be7eede514b8483ab195aa8210cd1645a47af83d864c2b7f7",
+      "version": "13.1.0.59-1"
+    }
+  ]
+}

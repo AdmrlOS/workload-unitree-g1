@@ -1,95 +1,96 @@
-# G1 EDU user-board BSP handoff (Jetson Orin NX, Tegra 6.8)
+# G1 BSP / Clean slate boundary
 
-This image runs in Admiral's workload namespace; **the BSP owns USB, kernel
-drivers, the physical network interface, host udev and the host `/dev` tree**.
-The second Orin NX is the target, not the locked motion-control board.
+The platform target is **G1 EDU PC4 Orin NX, NVIDIA L4T 39.2.1**. Admiral's
+immutable OS is built for this carrier. The workload supplies Ubuntu 26.04
+application userspace. It never flashes firmware or changes the host rootfs.
 
-## 1. D435i camera and stable capture node
+| Responsibility | G1 Admiral BSP / provisioning | Clean slate image |
+|---|---|---|
+| Boot and carrier | MB2 EEPROM configuration, G1 USB3 lane mapping, DTB, clocks/power/thermal | None |
+| USB and camera driver | xHCI, UVC/V4L2, actual `/dev/video*` nodes, USB bus and sysfs | Identify the D435i RGB capture node; maintain `/dev/rlsen0`; warmup/reconnect |
+| NVIDIA hardware | Matching kernel modules, firmware, NVGPU/VIC/NVENC/NVJPG/NvSci devices | Matching multimedia/CUDA application libraries and video service |
+| GPU driver | Inject R39.2.1 NVGPU driver and companion libraries | No libcuda or duplicate injected companions |
+| Robot LAN | Wired NIC named `eth0`, IP `192.168.123.164/24`, multicast connectivity | Vendor CycloneDDS and H.264 on that NIC |
+| Time | One clock owner, synchronized to PC1 as required | Report requirement; do not run conflicting clock daemons |
+| Wi-Fi/BT | G1 RTL8852BU driver, firmware, blacklist/autoload policy | Application connectivity through Admiral |
+| Audio | ALSA kernel drivers, stable card assignment and `/dev/snd` | Vendor ALSA configuration and amixer; validate card mapping |
 
-`video_hub_pc4_1.0.1.1` hardcodes `v4l2src device=/dev/rlsen0` at **YUY2,
-1920×1080, 15 fps**. Its included udev rule is:
+## Carrier source reviewed
 
-```udev
-# /etc/udev/rules.d/70-unitree-realsense-rlsen0.rules (BSP/host rootfs)
-SUBSYSTEM=="video4linux", ENV{ID_VENDOR_ID}=="8086", ENV{ID_MODEL_ID}=="0b3a", ENV{ID_USB_INTERFACE_NUM}=="03", ENV{ID_V4L_CAPABILITIES}=="*capture*", SYMLINK+="rlsen0"
-```
+[unitree-jetpack g1](https://github.com/legion1581/unitree-jetpack/tree/f2742cf578bc4d0754301e0de6413cbb9c29f633),
+particularly `versions/7.2/patches/10-*`, `20-*`, `50-*`, `80-*` and
+[USB mapping](https://github.com/legion1581/unitree-jetpack/blob/f2742cf578bc4d0754301e0de6413cbb9c29f633/docs/usb-mapping.md).
+The upstream carrier work targets R39.2.0; rebuild/adapt it for Admiral's
+R39.2.1 kernel. Do not reuse an upstream `.ko` merely because both releases
+report kernel 6.8. The G1 carrier mapping enables the third SuperSpeed lane
+and moves the device-mode controller to the correct USB-C lane. Kernel
+modules, device tree and firmware remain BSP inputs.
 
-Place it in the **BSP's host udev rules**. The copy supplied by the UPK is
-intentionally removed from the OCI image: Admiral's host udev does not load
-rules from a container's `/etc/udev/rules.d`. It must create the symlink
-before the workload needs the camera, and recreate it after USB hotplug.
+## Camera initialization is owned by the workload
 
-- Enable the G1 carrier's correct USB3 ports/device tree and USB xHCI/UVC
-  V4L2 support (`uvcvideo`, `videodev`, videobuf2 dependencies, whether built
-  in or module). This is an **Intel USB camera**, not MIPI CSI/Argus.
-- The rule depends on host udev populating `ID_VENDOR_ID`, `ID_MODEL_ID`,
-  `ID_USB_INTERFACE_NUM`, and `ID_V4L_CAPABILITIES`. A minimal udev setup
-  without the standard persistent-V4L/USB ID rules and `v4l_id` import may
-  expose `/dev/video*` but **never match this rule**. Verify the properties
-  on the *color capture* node, not one of the D435i metadata/depth nodes.
-- Keep the host's `/dev` bind-mounted into the workload (`isolateDevices:
-  false`). `/dev/rlsen0` must resolve to a usable `/dev/videoN` in that
-  same tree. Do not hardcode `/dev/video4`: USB enumeration order changes.
+The vendor rule matches **USB 8086:0b3a, interface 03, video capture**. Its
+original text is retained at `/opt/unitree-g1/vendor-camera.rules` for audit.
+Installing it into a container does not make host udev read it. Instead,
+`unitree-g1-camera.py` scans the USB ancestry exposed under
+`/sys/class/video4linux`, queries V4L2 device capabilities, and creates the
+relative symlink `/dev/rlsen0 -> videoN` in Admiral's shared `/dev`.
 
-Verification **on Admiral OS** with camera connected:
+It rejects metadata/depth nodes and ambiguous cameras. With more than one
+D435i, set `UNITREE_CAMERA_SERIAL`. It never assumes a fixed `/dev/video4`,
+makes devices world-writable, reloads drivers, or needs the host udev database.
+**Do not also provision a host rule managing the same alias.** It refuses to
+overwrite a non-symlink at `/dev/rlsen0`.
 
-```sh
-lsusb -d 8086:0b3a
-udevadm info --query=property --name=/dev/videoN  # check the four properties above
-readlink -f /dev/rlsen0                      # points to the color capture node
-v4l2-ctl -d /dev/rlsen0 --all                # reports Video Capture
-v4l2-ctl -d /dev/rlsen0 --list-formats-ext   # YUY2 1920x1080 @15 fps
-```
+The supervisor waits for the device, captures 45 RGB frames at the vendor
+format (YUY2, 1920×1080, 15 fps), then launches video hub. Failed warmup is
+retried rather than launching an already-stalled pipeline. USB identity
+changes stop the old process, refresh the alias and repeat warmup. A camera
+unplug does not kill the user's application; consumers must tolerate a gap.
+This is process/hotplug recovery, not a proof of continuous frame delivery.
 
-Run `unitree-g1-status inspect` *inside the workload* to confirm it sees
-the same alias. The bundled warmup script captures 45 frames using
-`v4l2src` before starting video_hub because this D435i may stall during
-its first stream after cold power-up. The workload does not generate the
-udev symlink, and does not run a second udev daemon.
+The workload needs readable `/sys/class/video4linux`, `/sys/devices` and
+shared writable `/dev`, supplied by Admiral's normal device passthrough.
+Host rootfs immutability does not prevent creating a symlink in devtmpfs.
 
-## 2. Hardware video encode and multimedia device exposure
+## NVIDIA multimedia
 
-The actual GStreamer pipeline is: `v4l2src /dev/rlsen0` → `nvvidconv`
-(NVMM/VIC) → `nvv4l2h264enc` (NVENC, 720p and 360p) plus `nvjpegenc`
-(1080p JPEG). Encoded H.264 also goes to **UDP multicast
-230.1.1.1:1720** via `eth0`.
+Expose the actual R39.2.1 kernel's NVMM/VIC/NVENC/JPEG and NvSci interfaces,
+including `/dev/nvmap`, GPU/host1x controls, and the relevant `nvhost-*`
+engine nodes. Names can differ by kernel; compare actual engine devices to
+a vendor-flashed G1. Pass `/dev/snd` and USB bus devices too. Never fake
+major/minor numbers. `/dev/nvidia0` is not an Orin readiness test.
 
-- Expose Tegra NVMM/multimedia device nodes from the matching NVIDIA R39.2.x
-  kernel/firmware: `/dev/nvmap` and the NVHOST VIC, NVENC/MSENC and JPEG
-  engine control nodes (actual names differ across releases; commonly
-  `/dev/nvhost-vic`, `/dev/nvhost-nvenc*`, `/dev/nvhost-msenc`,
-  `/dev/nvhost-nvjpg*`). Also expose NVGPU/DRM device nodes required by the
-  Admiral NVIDIA profile. **Confirm actual nodes and permissions on G1
-  hardware**; do not create fake nodes in the image. `/dev/nvidia0` and
-  `nvidia-smi` are desktop GPU assumptions, not this Tegra path.
-- Ensure Admiral's device permissions include these nodes (the workload
-  starts the vendor stack as root). Default full `/dev` pass-through with
-  `isolateDevices: false` is the intended setup, including USB bus nodes
-  for any subsequent userspace USB/RealSense tooling.
-- **Userspace belongs in the OCI image, not the BSP:** NVIDIA's R39.2.x
-  `nvidia-l4t-multimedia`, `-multimedia-utils`, `-camera` and `-nvsci`
-  libraries must be bundled without a competing `libcuda.so.1` driver.
-  The current image lacks these multimedia libraries, so its NVIDIA
-  GStreamer elements do **not** load, even though the Unitree services
-  start. See `docs/admiral-mapping.md`. The BSP must supply the matching
-  kernel/firmware/devices and identify which L4T release it uses; image
-  maintainers supply the matching user libraries.
+`config/nvidia-packages.json` pins application libraries. The extra
+`libnvrm_stream`, VIC and 2D helper libraries are selected from `l4t-core`
+because they are absent from the inspected Admiral compute-driver inventory.
+`config/admiral-driver-libraries.json` names libraries that must remain absent
+from the image. If the G1 BSP broadens its injected inventory, reconcile this
+boundary and rebuild the base rather than shipping two copies.
 
-## 3. Wired robot network and time
+The image includes NvSci userspace and its endpoint config. NVIDIA's host
+NvSci device initialization/UID policy remains in the BSP; the image does
+not execute NVIDIA's systemd scripts or their `chmod 666` operation. Validate
+the multimedia engines on the G1, not just CUDA compute on an Orin Nano.
 
-Set the **host** robot NIC to `eth0` (or agree a change to the package's
-CycloneDDS XML and GStreamer pipeline); the package hardcodes `eth0` in
-both. Provision `192.168.123.164/24` on the robot network. Use
-`hostNetwork: true` so DDS discovery and `230.1.1.1:1720` reach the main
-computer. The vendor OTA CLI also targets **tcp://192.168.123.164:1026**;
-it cannot connect in a Docker NAT test on an unrelated host. Chrony from
-the patch UPK is a systemd unit and is not run in
-the OCI image: arrange clock sync with the main computer at the OS/BSP
-network layer if needed for the robot's timestamps.
+## Robot LAN, time and audio
 
-The base supervisor invokes `amixer set Speaker 75%`; if PC4 audio is
-needed, expose the host ALSA `/dev/snd/*` nodes and matching sound driver.
-The current video pipeline does **not** require CAN/motor UARTs, a MIPI
-CSI/Argus camera, or an x86-style `/dev/nvidia0`. It also attempts to set
-`/proc/sys/kernel/core_pattern` for diagnostics; this may be read-only in
-the workload and is not a camera or device-pass-through requirement.
+The vendor configuration expects `eth0`. Its camera multicast interface is
+compiled into video hub. Provision `.164/24` before startup, without a
+competing default route on this point-to-point LAN; use another Admiral
+interface for registry/internet access. PC1 is conventionally `.161`, and the
+patch's chrony file names `192.168.123.161` as its NTP server. Confirm this on
+the target robot; SDK2 selects the Ethernet interface and DDS peers rather
+than requiring a hard-coded HTTP endpoint.
+
+The inspected Admiral capability set does **not** include `CAP_SYS_TIME`.
+Starting stock chronyd in this image would therefore not reproduce clock
+synchronization. Configure the Admiral host's existing time service to use
+the robot's time source. Do not claim stock timestamp parity until offset
+and clock ownership are verified. If workload-owned clock control is later
+required, it needs an explicit Admiral capability/clock-ownership change.
+
+The bootstrap selects an ALSA card and invokes `amixer set Speaker 75%`.
+Validate its `/etc/asound.conf` against `aplay -l` and `amixer` on the actual
+G1. Ubuntu enumeration on a different BSP can change the numeric card index;
+record any required stable ALSA mapping in the workload rather than masking
+errors by ignoring them.

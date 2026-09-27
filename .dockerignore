@@ -1,9 +1,13 @@
 .git
 .gitignore
-docs/
 capture/README.md
 capture/capture-unitree-g1.sh
 capture/MANIFEST.txt
 Upks for unitree_jetpack */
 capture/unitree-g1-rootfs.tar.zst
 **/__pycache__/
+tests/
+examples/
+artifacts/nvidia/
+artifacts/test-driver-debs/
+.DS_Store

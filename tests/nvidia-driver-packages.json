@@ -1,0 +1,26 @@
+[
+  {
+    "name": "nvidia-l4t-3d-core",
+    "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-3d-core/nvidia-l4t-3d-core_39.2.1-20260806224157_arm64.deb",
+    "sha256": "77fcb6c2c11ed67403f8e7697aab9d6ef11a2acbde86dd38a062a8945d5d8631",
+    "version": "39.2.1-20260806224157"
+  },
+  {
+    "name": "nvidia-l4t-core",
+    "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-core/nvidia-l4t-core_39.2.1-20260806224157_arm64.deb",
+    "sha256": "277a6fb25f2c06cc2dee6d352bef3abb15929739f396fea1cee70d1dea83008b",
+    "version": "39.2.1-20260806224157"
+  },
+  {
+    "name": "nvidia-l4t-cuda",
+    "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-cuda/nvidia-l4t-cuda_39.2.1-20260806224157_arm64.deb",
+    "sha256": "a8f65b17c3dc9cae34d77e3a3481b809a49443d83241d85d5fea36525af6ab51",
+    "version": "39.2.1-20260806224157"
+  },
+  {
+    "name": "nvidia-l4t-cuda-nvgpu",
+    "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-cuda-nvgpu/nvidia-l4t-cuda-nvgpu_39.2.1-20260806224157_arm64.deb",
+    "sha256": "a70b1a731eaaf8a528428f1f8fe882ba5b06d670d8ffe28c338342fd195eb302",
+    "version": "39.2.1-20260806224157"
+  }
+]

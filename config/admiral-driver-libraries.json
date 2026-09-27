@@ -1,0 +1,12 @@
+[
+  "libcuda.so", "libcuda.so.1", "libcuda.so.1.1",
+  "libcuda_instrumentation.so", "libcuda_instrumentation.so.1",
+  "libnvcucompat.so", "libnvcuextend.so", "libnvidia-gpucomp.so.595.78",
+  "libnvidia-nvvm.so.4", "libnvidia-nvvm.so.595.78",
+  "libnvidia-nvvm70.so.4", "libnvidia-nvvm70.so.595.78",
+  "libnvidia-ptxjitcompiler.so.1", "libnvidia-ptxjitcompiler.so.595.78",
+  "libnvidia-tileiras.so.595.78", "libnvos.so", "libnvrm_chip.so",
+  "libnvrm_gpu.so", "libnvrm_host1x.so", "libnvrm_mem.so",
+  "libnvrm_surface.so", "libnvrm_sync.so", "libnvsciipc.so",
+  "libnvsocsys.so", "libnvtegrahv.so"
+]

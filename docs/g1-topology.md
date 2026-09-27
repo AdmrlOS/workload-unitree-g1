@@ -1,17 +1,25 @@
-# Hardware target
+# Hardware and communication target
 
-The G1 EDU user-workload computer described in
-[unitree-jetpack/g1](https://github.com/legion1581/unitree-jetpack/tree/g1)
-is a Jetson Orin NX on the G1 carrier. This image runs the **PC4 user
-stack on that NX**. It does not replace the robot's protected motion-control
-computer or its motor/position services.
+This image runs the **PC4 user-workload stack** on the G1 EDU's Jetson Orin NX.
+Admiral's G1-specific BSP supplies NVIDIA L4T **39.2.1** kernel/firmware/driver
+components. The image supplies **Ubuntu 26.04** userspace. It does not replace
+PC1 or the robot's protected locomotion firmware.
 
-The JetPack 7.2 build targets L4T 39.2.0, Ubuntu 24.04, kernel 6.8 on
-Tegra234. The base ZIP and the Noble 7.2 patch plus common video UPKs
-contain the PC4 services. `video_hub_pc4` consumes the D435i USB color
-camera through V4L2 (`/dev/rlsen0`), NVIDIA VIC/NVENC/JPEG through
-GStreamer/NVMM, and publishes UDP H.264 to `230.1.1.1:1720` on `eth0`.
-Its CycloneDDS config also selects `eth0` for DDS discovery.
+```text
+User application on PC4 (.164, eth0)
+  ├─ Unitree SDK2 / CycloneDDS, domain 0 ── Ethernet/IP ── robot control services
+  ├─ UDP camera consumer ◀── video hub multicast 230.1.1.1:1720
+  └─ CUDA/vision application ── Admiral-injected GPU driver ── Orin NX
 
-The static robot network address `192.168.123.164/24` and clock sync
-belong to Admiral's host OS/BSP provisioning, not to the container.
+D435i USB RGB ── BSP UVC driver ── workload /dev/rlsen0 ── video hub
+                                                    VIC / NVENC / JPEG
+```
+
+PC1 is conventionally `192.168.123.161`; the vendor clock configuration
+points there. Confirm the mapping for the target firmware/hardware revision.
+The locomotion SDK uses named DDS services, initialized on `eth0`, rather
+than connecting to an HTTP motion API at a fixed PC1 port.
+
+See [movement control and application development](clean-slate.md#movement-control-ip-dds-and-sdk2),
+[the BSP contract](bsp-handoff.md), and
+[the G1 source reviewed](https://github.com/legion1581/unitree-jetpack/tree/f2742cf578bc4d0754301e0de6413cbb9c29f633).

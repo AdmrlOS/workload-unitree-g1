@@ -110,7 +110,7 @@ def install(archive, files, name, root):
 
     # The OTA install commands in module.json invoke systemctl and udevadm.
     # In an Admiral image we only stage their declared file payload. Services
-    # are started by our entrypoint and kernel/udev belong to Admiral OS.
+    # are started by our entrypoint; workload camera discovery replaces udev.
     for path, member in payload.items():
         dest = root.joinpath(*pathlib.PurePosixPath(path).parts[1:])
         dest.parent.mkdir(parents=True, exist_ok=True)

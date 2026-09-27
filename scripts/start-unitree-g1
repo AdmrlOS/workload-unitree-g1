@@ -1,73 +1,87 @@
 #!/bin/bash
-# start-unitree-g1 — Admiral ENTRYPOINT (run under tini -g).
-#
-# Admiral's launch contract (docs.admrl.co/core-concepts/configurations)
-# tracks a single root process + its cgroup and restarts the whole workload
-# if that process exits. The vendor Unitree services are SysV daemons that
-# fork-and-detach (start-stop-daemon --background) via their own
-# /etc/init.d/{master_service,ota_pipe} scripts — that's fine, we invoke
-# those scripts as-is (lsb-base is installed so their init-functions sourcing
-# works with no real init system present), but it means nothing about
-# running them blocks in the foreground on its own.
-#
-# So: start ota_pipe + master_service via their init scripts, keep SSH up for
-# diagnostics (same "never let a subsystem failure take down remote access"
-# posture as workload-cuda-debug's start-cuda-debug), and run a foreground
-# watchdog that IS the tracked process — if master_service disappears, the
-# watchdog exits non-zero so Admiral notices the crash and restarts the
-# container per its rollout/health policy, instead of silently running with
-# half the stack dead forever.
-set -uo pipefail
+# One supervised system userspace: robot services + optional child-image CMD.
+set -Eeuo pipefail
 umask 022
-mkdir -p /run/sshd /var/log/unitree-g1
+mkdir -p /run/sshd /run/unitree-g1 /var/log/unitree-g1 /unitree/var/run
+export GST_REGISTRY=/run/unitree-g1/gstreamer-registry.bin
+export CYCLONEDDS_URI=/unitree/module/video_hub_pc4/cyclonedds.xml
+log() { printf '%s %s\n' "$(date -u --iso-8601=seconds)" "$*" | tee -a /var/log/unitree-g1/boot.log; }
+SSHD_PID='' APP_PID='' LOG_PID=''
+cleanup() {
+    trap - EXIT TERM INT
+    log 'stopping application and Unitree services'
+    if [[ -n "$APP_PID" ]]; then kill -TERM -- "-$APP_PID" 2>/dev/null || true; fi
+    # Stop the manager first so it cannot relaunch a module during teardown.
+    timeout 4 /etc/init.d/master_service stop >>/var/log/unitree-g1/boot.log 2>&1 || true
+    /unitree/sbin/start-stop-daemon --stop --pidfile=/unitree/var/run/videohub_pc4.pid \
+        --retry TERM/5/KILL/1 >>/var/log/unitree-g1/boot.log 2>&1 || true
+    if [[ -n "$APP_PID" ]]; then
+        for _ in {1..5}; do kill -0 -- "-$APP_PID" 2>/dev/null || break; sleep 1; done
+        kill -KILL -- "-$APP_PID" 2>/dev/null || true
+        wait "$APP_PID" 2>/dev/null || true
+    fi
+    for pid in "$SSHD_PID" "$LOG_PID"; do
+        [[ -z "$pid" ]] || kill "$pid" 2>/dev/null || true
+    done
+}
+trap cleanup EXIT
+trap 'exit 0' TERM INT
 
-# Host SSH keys are generated fresh at first start, never baked into the
-# image (same posture as workload-cuda-debug).
+interval=${UNITREE_WATCHDOG_INTERVAL:-5}
+[[ "$interval" =~ ^[1-9][0-9]*$ ]] || { log 'invalid UNITREE_WATCHDOG_INTERVAL'; exit 2; }
+
 ssh-keygen -A
 /usr/sbin/sshd -t
 /usr/sbin/sshd -D -e &
 SSHD_PID=$!
-echo "unitree-g1: sshd started (pid ${SSHD_PID}), port 22, root or unitree-ssh"
 
-# --- Unitree PC4 stack -------------------------------------------------------
-log() { printf '%s %s\n' "$(date -u --iso-8601=seconds)" "$*" | tee -a /var/log/unitree-g1/boot.log; }
+# These stack-owned PID files can outlive a process on Admiral's reused rootfs.
+rm -f /unitree/var/run/master_service.pid \
+    /unitree/var/run/videohub_pc4.pid /run/unitree-g1/camera.json "$GST_REGISTRY"
+case "${UNITREE_HARDWARE_CHECKS:-1}" in
+    1) /usr/local/bin/unitree-g1-check.py platform ;;
+    0) log 'hardware preflight disabled: development/CI mode, not a hardware readiness result' ;;
+    *) log 'UNITREE_HARDWARE_CHECKS must be 0 or 1'; exit 2 ;;
+esac
 
-# The D435i udev rule belongs in the Admiral BSP. The container sees the
-# host /dev, but rules in its own rootfs are not read by the host daemon.
-if [[ ! -e /dev/rlsen0 ]]; then
-    log "Camera /dev/rlsen0 absent: install the host udev rule in docs/bsp-handoff.md; video_hub_pc4 cannot stream yet"
+# Follow module logs into Admiral's dashboard. Do not pipe daemon launches
+# through tee: their inherited descriptors would leave the pipe open forever.
+touch /var/log/videohub-warmup.log
+tail -n 0 -F /var/log/videohub-warmup.log &
+LOG_PID=$!
+log 'starting master_service (software updates are managed by Admiral)'
+/etc/init.d/master_service start >>/var/log/unitree-g1/boot.log 2>&1
+# Bound startup by observed service readiness, not runner/board speed.
+for _ in {1..30}; do
+    /etc/init.d/master_service status >/dev/null 2>&1 && break
+    sleep 1
+done
+/etc/init.d/master_service status
+timeout 10 /unitree/sbin/mscli listservice || true
+
+if (($#)); then
+    # argv is the child Dockerfile CMD; never eval an environment string.
+    # Admiral starts at / regardless of WORKDIR.
+    cd "${UNITREE_APP_DIR:-/opt/app}"
+    log "starting user application: $1"
+    if [[ -n "${UNITREE_APP_USER:-}" ]]; then
+        setsid setpriv --reuid="$UNITREE_APP_USER" --regid="$(id -g "$UNITREE_APP_USER")" \
+            --init-groups -- "$@" &
+    else
+        setsid -- "$@" &
+    fi
+    APP_PID=$!
 fi
 
-# NOTE: deliberately `>>file 2>&1`, not `| tee`. These init.d scripts
-# background (start-stop-daemon-style) a long-lived daemon that inherits
-# whatever stdout/stderr fd it's launched with. Piping through `tee` here
-# would leave `tee` waiting forever for EOF on a pipe the now-backgrounded
-# daemon still holds open — the entrypoint would hang at container start on
-# every boot. Plain file redirection has no such reader to starve.
-log "starting ota_pipe"
-/etc/init.d/ota_pipe start >>/var/log/unitree-g1/boot.log 2>&1 || log "WARN: ota_pipe start returned non-zero"
-
-log "starting master_service (supervises the Unitree module set via mscli)"
-/etc/init.d/master_service start >>/var/log/unitree-g1/boot.log 2>&1 || log "WARN: master_service start returned non-zero"
-
-sleep 3
-if command -v /unitree/sbin/mscli >/dev/null 2>&1; then
-    /unitree/sbin/mscli listservice >>/var/log/unitree-g1/boot.log 2>&1 || true
-fi
-
-# --- Watchdog: the tracked foreground process --------------------------------
-# Admiral treats this exit as "the workload crashed" — see
-# docs/admiral-mapping.md for how that maps to restart/rollback behavior.
-CHECK_INTERVAL="${UNITREE_WATCHDOG_INTERVAL:-10}"
-log "watchdog: monitoring master_service every ${CHECK_INTERVAL}s"
 while true; do
-    if ! pgrep -x master_service >/dev/null 2>&1; then
-        log "FATAL: master_service is not running — exiting so Admiral restarts the workload"
+    /etc/init.d/master_service status >/dev/null 2>&1 || { log 'FATAL: master_service died'; exit 1; }
+    kill -0 "$SSHD_PID" 2>/dev/null || { log 'FATAL: sshd died'; exit 1; }
+    if [[ -n "$APP_PID" ]] && ! kill -0 "$APP_PID" 2>/dev/null; then
+        code=0
+        wait "$APP_PID" || code=$?
+        log "FATAL: user application exited ($code); restarting the whole userspace"
         exit 1
     fi
-    if ! kill -0 "${SSHD_PID}" 2>/dev/null; then
-        log "FATAL: sshd died — exiting so Admiral restarts the workload"
-        exit 1
-    fi
-    sleep "${CHECK_INTERVAL}"
+    sleep "$interval" &
+    wait $! || true
 done
