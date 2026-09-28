@@ -75,6 +75,11 @@ a Docker daemon on the robot.
    YUY2 1920×1080 at 15 fps. Do not treat a kernel version string alone as
    proof of a matching driver payload.
 
+   In the workload SSH session, confirm `libcuda.so.1` appears in `ldconfig -p`
+   even when `LD_LIBRARY_PATH` is unset. The startup loader refresh must make
+   injected drivers available to login sessions as well as the entrypoint.
+   `unitree-g1-status inspect` uses a fresh cache to avoid stale plugin blacklists.
+
 2. **Actual video.** Wait for warmup to pass and `unitree-g1-status check` to
    succeed. Observe live, advancing frames in the stock robot app. Independently
    verify JPEG and H.264 output, both encoded H.264 resolutions used by the

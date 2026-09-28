@@ -100,3 +100,18 @@ readiness still fail; no video capability is fabricated. Camera startup waits
 in `blocked` when required elements are unavailable instead of launching the
 vendor pipeline. No software encoder is substituted for the stock service.
 The owner-requested GitHub public key is included for root and unitree-ssh.
+
+## 2026-09-28: SSH plugin inspection on the live Nano
+
+The running workload was reachable over SSH and master_service responded.
+`nvvidconv` and `nvjpegenc` nevertheless appeared missing in SSH diagnostics.
+Direct inspection found `libcuda.so.1` unresolved when `LD_LIBRARY_PATH` was
+unset: this deployed Admiral version exposed the driver under `/run/admiral`
+and `/run/admrl`, but did not bind it into the standard multiarch library path.
+Both plugins registered successfully when given the injected path explicitly.
+
+The image now supplies a loader configuration for those directories and runs
+`ldconfig -X` after injection, before starting SSH/services. Inspection uses a
+fresh temporary GStreamer cache and prints registration errors instead of
+hiding them. This resolves environment-independent library lookup; it does
+not add the Nano's missing NVENC engine or establish hardware encode readiness.

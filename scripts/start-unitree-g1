@@ -30,6 +30,11 @@ trap 'exit 0' TERM INT
 interval=${UNITREE_WATCHDOG_INTERVAL:-5}
 [[ "$interval" =~ ^[1-9][0-9]*$ ]] || { log 'invalid UNITREE_WATCHDOG_INTERVAL'; exit 2; }
 
+# Admiral injects drivers after the image is built. SSH and some service
+# launchers clear LD_LIBRARY_PATH, so populate the workload's loader cache
+# now. -X updates only the cache, never links in the read-only BSP payload.
+/sbin/ldconfig -X
+
 ssh-keygen -A
 /usr/sbin/sshd -t
 /usr/sbin/sshd -D -e &

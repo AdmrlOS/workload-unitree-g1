@@ -67,6 +67,12 @@ because they are absent from the inspected Admiral compute-driver inventory.
 from the image. If the G1 BSP broadens its injected inventory, reconcile this
 boundary and rebuild the base rather than shipping two copies.
 
+The workload includes both published and current injected-driver directories
+in `/etc/ld.so.conf.d/000-admiral-nvidia.conf`. Startup runs `ldconfig -X`
+after Admiral injects the payload, so SSH and services that clear
+`LD_LIBRARY_PATH` still resolve the driver. This updates the workload's loader
+cache only; it does not copy drivers or modify the read-only BSP payload.
+
 The image includes NvSci userspace and its endpoint config. NVIDIA's host
 NvSci device initialization/UID policy remains in the BSP; the image does
 not execute NVIDIA's systemd scripts or their `chmod 666` operation. Validate

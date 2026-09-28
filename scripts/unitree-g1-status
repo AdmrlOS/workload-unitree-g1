@@ -8,6 +8,11 @@ section() { printf '\n--- %s ---\n' "$*"; }
 
 case "${1:-inspect}" in
 inspect)
+    # A prior SSH session may have blacklisted plugins before driver lookup
+    # was configured. Use a private, writable cache even for non-root users.
+    diagnostic_dir=$(mktemp -d /tmp/unitree-g1-status.XXXXXX) || exit 1
+    trap 'rm -rf -- "$diagnostic_dir"' EXIT
+    export GST_REGISTRY="$diagnostic_dir/registry.bin"
     date -u --iso-8601=seconds
     uname -a
     id
@@ -34,10 +39,19 @@ inspect)
     section "CycloneDDS runtime"
     ldconfig -p | grep -i libddsc || echo "libddsc.so.0 NOT in ldconfig cache"
 
+    section "NVIDIA driver lookup (must also work without LD_LIBRARY_PATH)"
+    printf 'LD_LIBRARY_PATH=%s\n' "${LD_LIBRARY_PATH:-<unset>}"
+    ldconfig -p | grep 'libcuda.so.1 ' || echo "libcuda.so.1 NOT in loader cache"
+
     section "L4T GStreamer hardware plugins"
     if command -v gst-inspect-1.0 >/dev/null 2>&1; then
         for elem in nvv4l2h264enc nvvidconv nvjpegenc; do
-            gst-inspect-1.0 "$elem" >/dev/null 2>&1 && echo "OK   $elem" || echo "MISSING $elem"
+            if gst-inspect-1.0 "$elem" >"$diagnostic_dir/$elem.log" 2>&1; then
+                echo "OK   $elem"
+            else
+                echo "UNAVAILABLE $elem"
+                cat "$diagnostic_dir/$elem.log"
+            fi
         done
     else
         echo "gst-inspect-1.0 not installed in this image"
