@@ -70,6 +70,28 @@ model runtimes and your control policy belong in application layers. Keep the
 stock color-camera stream available unless your application deliberately
 replaces its ownership and passes a different acceptance test.
 
+## Development on Orin Nano
+
+An Orin Nano is useful for application/CUDA development but cannot validate
+stock G1 video. It lacks NVENC, unlike the Orin NX in the G1. NVIDIA's R39.2.1
+plugin explicitly excludes the encoder on module IDs P3767-0003/0004/0005;
+installing more packages or changing the BSP cannot add the missing engine.
+
+Default startup warns about unmet G1 requirements and keeps the workload,
+SSH and application available. The camera supervisor reports `blocked` and
+retries capability inspection every 30 seconds rather than launching a broken
+vendor video pipeline. `unitree-g1-status video` explains this limitation;
+`unitree-g1-status check` remains a failing readiness check. Application authors
+must decide which capabilities their code needs before using them.
+
+Software H.264 encoding is possible in a separate application pipeline, but
+is not a drop-in replacement for the closed Unitree video service. This base
+does not silently substitute it or claim stock video parity on Nano. Validate
+camera encoding and robot integration on the actual G1 Orin NX.
+
+Sources: [NVIDIA Nano software encoding guide](https://docs.nvidia.com/jetson/archives/r36.5/DeveloperGuide/SD/Multimedia/SoftwareEncodeInOrinNano.html),
+[NVIDIA R39.2.1 plugin source](https://gitlab.com/nvidia/nv-tegra/tegra/gst-src/gst-nvvideo4linux2/-/blob/f9ac956fb7010a3b5a9758a1181ada8c332d83ec/gst-v4l2/gstv4l2.c).
+
 ## Create your first application
 
 The working starter is [examples/camera-receiver](../examples/camera-receiver).
@@ -118,7 +140,12 @@ and Admiral registry configuration, never in the Dockerfile.
 
 ## How application startup behaves
 
-The base verifies the platform and starts Unitree's service manager. It
+The base checks the platform and starts Unitree's service manager. By default,
+failed platform checks print warnings without stopping SSH or the application.
+`UNITREE_HARDWARE_CHECKS=1` makes a failed check stop startup; use this in a
+production G1 child image when the application must require the complete
+platform before starting. `unitree-g1-status check` always fails on unmet
+readiness, regardless of the startup policy. The base
 then executes your CMD in its own process group. The camera manager may still
 be waiting for USB or warming up: apps must retry connections and tolerate
 camera gaps. Use the camera state or your first received frame when a feature
@@ -139,7 +166,7 @@ Application configuration:
 | `UNITREE_APP_USER` | unset (root) | Named/numeric existing account to run the app as |
 | `UNITREE_CAMERA_SERIAL` | unset | Select one D435i if several match |
 | `UNITREE_WATCHDOG_INTERVAL` | `5` | Positive integer seconds between service checks |
-| `UNITREE_HARDWARE_CHECKS` | `1` | `0` permits hardware-free development; never a production readiness setting |
+| `UNITREE_HARDWARE_CHECKS` | `warn` | Log platform failures and continue; `1` requires them to pass before starting services/apps; `0` skips startup inspection |
 
 Prefer an unprivileged application account. The base's `admiral-video` group
 has numeric GID **28**, matching Admiral's GPU permissions. Dockerfile `USER`
@@ -300,13 +327,24 @@ workload**, `/usr/local/bin/unitree-g1-status inspect` collects process, camera,
 network and library diagnostics. This repository supplies that command in the
 image; neither the host OS nor the kernel must provide it. `check` returns
 nonzero for unmet readiness; it still cannot prove remote frame reception.
-For SSH, add only your own public key in the child Dockerfile:
+This build includes the owner-requested `alexanderturner` GitHub public key
+(snapshot fetched 2026-09-28), fingerprint
+`SHA256:yp9F51C0Pp4QoSw3WbEKDpSsnGoh0n0UXjK/p6qqCUE`.
+Connect with your matching private key using `ssh root@BOARD_IP` or
+`ssh unitree-ssh@BOARD_IP`. The G1 robot-LAN address is `192.168.123.164`;
+on a development board use its actual reachable IP.
+
+Derived images inherit this key. To provision different access, replace **both**
+key files in the child Dockerfile:
 
 ```dockerfile
 COPY --chmod=0600 authorized_keys /root/.ssh/authorized_keys
+COPY --chown=unitree-ssh:unitree-ssh --chmod=0600 authorized_keys /home/unitree-ssh/.ssh/authorized_keys
 ```
 
-The base has no authorized keys or password login. Port 22 is on the host
+Remove both files' contents to disable authorized SSH access. Password login
+remains disabled. GitHub is not contacted at boot or build: changing GitHub keys
+requires updating the committed snapshot and deploying a rebuilt image. Port 22 is on the host
 network; ensure Admiral's management setup does not occupy the same port.
 Provisioning durable SSH host keys can use an application-specific persistent
 location, without mounting over all of `/etc/ssh` and hiding its configuration.

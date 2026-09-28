@@ -38,7 +38,7 @@ Sources inspected:
 | Root process watched only master_service and SSH | App failure could be hidden | Watch the manager, SSH and optional foreground app; structured teardown |
 | PC4 could update itself via Unitree OTA | Runtime changes diverged from the published OCI image | Remove updater, CLI, pending payloads and live/backup startup hooks; Admiral owns deployment |
 | PID files survive Admiral's reused rootfs | Restart could act on stale process IDs | Remove stack-owned stale PID files before service startup |
-| Global personal authorized keys were baked into the base | Derived apps inherited maintainer SSH access | Empty key files by default; explicit child-image key provisioning |
+| SSH access must be explicit | Derived apps inherit base authorized keys | Owner requested GitHub alexanderturner key on 2026-09-28; pinned snapshot installed in both accounts, inheritance documented |
 | No child-image application contract | Easy to bypass robot startup with ENTRYPOINT | Exec-form child CMD, supervised process group, explicit working directory and optional privilege drop |
 | ARM64 service status was checked under x64/QEMU | Vendor process inspection can misidentify a live process | Native ARM64 build; remove runtime test gates from publication as requested |
 | Documentation treated workload-created device aliases as impossible | Incorrect platform boundary | Corrected BSP/OCI contract and deployment instructions |
@@ -85,3 +85,18 @@ removes PC4 update/version-query functionality that depends on the vendor OTA
 endpoint. Admiral image deployment is the update and rollback mechanism. Ubuntu package resolution at base-build time is recorded,
 not fully snapshot-locked. Child builds become deterministic by reusing the
 approved base digest and locking their own dependencies.
+
+## 2026-09-28: Orin Nano startup report
+
+The reported `nvv4l2h264enc` failure occurred on Orin Nano, not the G1 Orin NX.
+NVIDIA's pinned R39.2.1 source deliberately omits encoder registration for
+Nano module IDs 3767-0003/0004/0005 because those modules lack NVENC. Passing
+ELF checks or plugin registration in a hardware-free fixture does not establish
+availability on a particular Jetson module.
+
+Startup inspection now defaults to `warn`: log unmet requirements and keep
+SSH/services/apps available. Strict `UNITREE_HARDWARE_CHECKS=1` and explicit
+readiness still fail; no video capability is fabricated. Camera startup waits
+in `blocked` when required elements are unavailable instead of launching the
+vendor pipeline. No software encoder is substituted for the stock service.
+The owner-requested GitHub public key is included for root and unitree-ssh.

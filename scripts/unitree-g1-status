@@ -12,6 +12,11 @@ inspect)
     uname -a
     id
 
+    section "Board identity (Nano and NX have different video capabilities)"
+    for path in /sys/firmware/devicetree/base/model /sys/firmware/devicetree/base/chosen/ids; do
+        if [ -r "$path" ]; then printf '%s: ' "$path"; tr '\000' ' ' < "$path"; echo; fi
+    done
+
     section "Unitree module versions"
     if [ -f /unitree/robot/pkg/version/version.json ]; then
         jq . /unitree/robot/pkg/version/version.json 2>/dev/null || cat /unitree/robot/pkg/version/version.json
@@ -71,6 +76,10 @@ platform)
     exec /usr/local/bin/unitree-g1-check.py platform
     ;;
 
+video)
+    exec /usr/local/bin/unitree-g1-check.py video
+    ;;
+
 services)
     timeout 10 /unitree/sbin/mscli listservice
     ;;
@@ -85,7 +94,7 @@ camera)
     ;;
 
 *)
-    echo "Usage: unitree-g1-status [inspect|check|platform|services|modules|camera]" >&2
+    echo "Usage: unitree-g1-status [inspect|check|platform|video|services|modules|camera]" >&2
     exit 2
     ;;
 esac

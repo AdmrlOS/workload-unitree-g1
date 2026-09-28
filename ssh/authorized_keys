@@ -1,9 +1,1 @@
-# Replace this file with your own SSH public key(s) before building the
-# image — one key per line, standard authorized_keys format. Left empty by
-# default (no key = no one can log in over SSH; safe default, not a
-# functional gap for the Unitree stack itself, which does not need SSH).
-#
-# Do not commit a real private organisation key to this repo. Prefer
-# per-deployment keys injected at build time via `docker build --build-arg`
-# + a build stage, or fetched from your own key-management source, over
-# checking a static key into git history.
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILR+kwBmphsOHATTC3EQ6iyj8kIcg6l5kJpCZIgsrdWj

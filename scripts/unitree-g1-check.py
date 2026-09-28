@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed build, platform and service-readiness checks (no motion commands)."""
+"""Explicit image, video, platform and readiness diagnostics (no motion commands)."""
 import argparse
 import ctypes
 import json
@@ -12,6 +12,43 @@ import sys
 LIB = Path('/usr/lib/aarch64-linux-gnu')
 CONFIG = Path('/opt/unitree-g1/config')
 PLUGINS = ('nvvidconv', 'nvv4l2h264enc', 'nvjpegenc')
+DEVICE_TREE = Path('/sys/firmware/devicetree/base')
+
+
+def board_info():
+    values = {}
+    for name in ('model', 'chosen/ids'):
+        try:
+            values[name] = (DEVICE_TREE / name).read_bytes().replace(b'\x00', b' ').decode(errors='replace').strip()
+        except OSError:
+            values[name] = 'unavailable'
+    return values
+
+
+def is_orin_nano(ids):
+    # Same module IDs excluded by NVIDIA's R39.2.1 gst-nvvideo4linux2.
+    # Do not infer the module from a shared Nano/NX carrier-board model name.
+    return bool(re.search(r'3767[-:]000[345]', ids))
+
+
+def video():
+    board = board_info()
+    print(f'Board: {board["model"]}; module IDs: {board["chosen/ids"]}', flush=True)
+    if is_orin_nano(board['chosen/ids']):
+        raise RuntimeError('Orin Nano has no NVENC hardware encoder. NVIDIA intentionally omits '
+                           'nvv4l2h264enc on this module. Stock Unitree video requires Orin NX; '
+                           'SSH/CUDA/application development can continue, but G1 video readiness cannot pass.')
+    # A private cache avoids retaining a blacklist generated before injection.
+    os.environ['GST_REGISTRY'] = '/run/unitree-g1/gstreamer-registry.bin'
+    Path('/run/unitree-g1').mkdir(parents=True, exist_ok=True)
+    for plugin in PLUGINS:
+        try:
+            execute(['gst-inspect-1.0', plugin])
+        except RuntimeError as exc:
+            raise RuntimeError(f'{exc}\nOn Orin Nano, nvv4l2h264enc is unavailable because it has '
+                               'no NVENC engine. On Orin NX, inspect the NVIDIA plugin, driver '
+                               'and BSP device access with unitree-g1-status inspect.') from exc
+    print('PASS: required NVIDIA video elements register (not an encode test)', flush=True)
 
 
 def execute(command):
@@ -88,11 +125,7 @@ def platform():
         raise RuntimeError(f'expected L4T 39.2.1 NVGPU, got {data.get("l4t_version")} / {data.get("variant")}')
     check_libraries()
     ctypes.CDLL('libcuda.so.1', mode=os.RTLD_NOW | os.RTLD_LOCAL)
-    # A private cache avoids retaining a blacklist generated before injection.
-    os.environ['GST_REGISTRY'] = '/run/unitree-g1/gstreamer-registry.bin'
-    Path('/run/unitree-g1').mkdir(parents=True, exist_ok=True)
-    for plugin in PLUGINS:
-        execute(['gst-inspect-1.0', plugin])
+    video()
     addresses = json.loads(execute(['ip', '-j', '-4', 'addr', 'show', 'dev', 'eth0']))
     if not any(a.get('local') == '192.168.123.164' and a.get('prefixlen') == 24
                for iface in addresses for a in iface['addr_info']):
@@ -116,10 +149,10 @@ def ready():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['image', 'platform', 'ready'])
+    parser.add_argument('mode', choices=['image', 'video', 'platform', 'ready'])
     args = parser.parse_args()
     try:
-        {'image': image, 'platform': platform, 'ready': ready}[args.mode]()
+        {'image': image, 'video': video, 'platform': platform, 'ready': ready}[args.mode]()
     except (OSError, RuntimeError, ValueError, KeyError, subprocess.SubprocessError) as exc:
         print(f'FAIL: {exc}', file=sys.stderr)
         return 1

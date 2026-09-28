@@ -38,10 +38,15 @@ SSHD_PID=$!
 # These stack-owned PID files can outlive a process on Admiral's reused rootfs.
 rm -f /unitree/var/run/master_service.pid \
     /unitree/var/run/videohub_pc4.pid /run/unitree-g1/camera.json "$GST_REGISTRY"
-case "${UNITREE_HARDWARE_CHECKS:-1}" in
+case "${UNITREE_HARDWARE_CHECKS:-warn}" in
+    warn)
+        if ! /usr/local/bin/unitree-g1-check.py platform; then
+            log 'WARNING: platform is not G1-ready; keeping SSH and application services available. Run unitree-g1-status check for readiness.'
+        fi
+        ;;
     1) /usr/local/bin/unitree-g1-check.py platform ;;
     0) log 'hardware preflight disabled: development/CI mode, not a hardware readiness result' ;;
-    *) log 'UNITREE_HARDWARE_CHECKS must be 0 or 1'; exit 2 ;;
+    *) log 'UNITREE_HARDWARE_CHECKS must be warn, 0 or 1'; exit 2 ;;
 esac
 
 # Follow module logs into Admiral's dashboard. Do not pipe daemon launches

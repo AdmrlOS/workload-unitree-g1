@@ -30,8 +30,15 @@ installation, custom GPU mounts or host udev file edits are required.
 
 The host NIC must be `eth0`, `192.168.123.164/24`. The image checks L4T 39.2.1,
 resolved NVIDIA libraries, the three video plugins and robot network before
-starting the Unitree stack. Missing hardware never becomes a passing readiness
-result. `UNITREE_HARDWARE_CHECKS=0` is only for hardware-free CI/development.
+starting the Unitree stack. By default, `UNITREE_HARDWARE_CHECKS=warn` logs
+failures and keeps SSH, the manager and the app available. Missing hardware
+never becomes a passing readiness result. Use `ENV UNITREE_HARDWARE_CHECKS=1`
+in a production child Dockerfile to require a passing platform check at startup.
+`0` skips startup inspection for local development.
+
+Orin Nano has no NVENC: stock video cannot run there. The camera supervisor
+reports `blocked` while SSH/apps can continue. Use the G1's Orin NX for full
+video acceptance; installing additional drivers cannot add a hardware encoder.
 
 Use `/var/lib/robot-app` for durable application data. A newly created volume
 can be root-owned; provision ownership for the app's UID (the starter uses
@@ -49,7 +56,7 @@ that endpoint are intentionally unsupported; PC1 firmware is unchanged.
 Admiral supervises the root process; Docker `HEALTHCHECK` is not executed.
 The entrypoint checks master_service, SSH and the optional app.
 Camera readiness is separately exposed by `unitree-g1-status check` and
-`/run/unitree-g1/camera.json`; a warmup/waiting state is not “camera ready”.
+`/run/unitree-g1/camera.json`; blocked, warmup and waiting states are not “camera ready”.
 
 On receipt of SIGTERM the entrypoint stops the app and vendor services; allow
 about 25 seconds for an orderly rollout stop. App and camera logs reach

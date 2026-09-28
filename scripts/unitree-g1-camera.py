@@ -127,9 +127,22 @@ def run_child(command, candidate, serial, timeout=None):
 
 def run(serial):
     previous = None
+    video_ok = False
     try:
         while not STOP.is_set():
             try:
+                if not video_ok:
+                    check = subprocess.run(['/usr/local/bin/unitree-g1-check.py', 'video'],
+                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                           text=True, timeout=70)
+                    if check.returncode:
+                        message = check.stdout.strip()
+                        if previous != message:
+                            status('blocked', message)
+                            previous = message
+                        STOP.wait(30)
+                        continue
+                    video_ok = True
                 camera = discover(serial=serial)
                 reconcile_alias(camera)
                 if camera is None:
@@ -154,7 +167,11 @@ def run(serial):
                 status('running', f'vendor video hub on {camera[0]}; warmup passed')
                 run_child(['stdbuf', '-oL', '/unitree/module/video_hub_pc4/videohub_pc4'],
                           camera, serial)
+                video_ok = False
                 status('retrying', 'video hub exited or USB identity changed')
+            except subprocess.TimeoutExpired:
+                status('blocked', 'video capability inspection timed out; retry in 30s')
+                STOP.wait(30)
             except (OSError, RuntimeError) as exc:
                 if previous != str(exc):
                     status('error', str(exc))

@@ -91,6 +91,23 @@ class CameraTests(unittest.TestCase):
         with patch.object(camera, 'discover', return_value=None):
             self.assertFalse(camera.run_child(['sleep', '30'], ('old', ()), '', timeout=2))
 
+    def test_missing_encoder_blocks_video_without_starting_capture(self):
+        camera.STOP.clear()
+        result = subprocess.CompletedProcess([], 1, 'Orin Nano has no NVENC')
+        def stop_after_wait(_):
+            camera.STOP.set()
+            return True
+        with patch.object(camera.subprocess, 'run', return_value=result), \
+                patch.object(camera.STOP, 'wait', side_effect=stop_after_wait), \
+                patch.object(camera, 'discover') as discover, \
+                patch.object(camera, 'run_child') as run_child, \
+                patch.object(camera, 'status') as status:
+            camera.run('')
+            status.assert_any_call('blocked', 'Orin Nano has no NVENC')
+            discover.assert_not_called()
+            run_child.assert_not_called()
+        camera.STOP.clear()
+
 
 if __name__ == '__main__':
     unittest.main()

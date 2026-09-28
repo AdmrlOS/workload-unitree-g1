@@ -38,7 +38,7 @@ docker exec "$name" /etc/init.d/master_service status
 docker exec "$name" /usr/local/bin/unitree-g1-status modules
 docker exec "$name" /bin/sh -c '! ss -ltnH | grep -q ":1026 "'
 docker exec "$name" jq -e '.Module.unitree_patch_pc4=="1.0.0.6" and .Module.video_hub_pc4=="1.0.1.1"' /unitree/robot/pkg/version/version.json
-docker exec "$name" jq -e '.state=="waiting"' /run/unitree-g1/camera.json
+docker exec "$name" jq -e '.state=="waiting" or .state=="blocked"' /run/unitree-g1/camera.json
 docker exec "$name" /unitree/sbin/mscli listservice
 docker stop -t 25 "$name" >/dev/null
 test "$(docker inspect -f '{{.State.ExitCode}}' "$name")" = 0

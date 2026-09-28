@@ -15,7 +15,7 @@ host; vendor service process checks are not validated under QEMU. They cover:
 - Registration of `nvvidconv`, `nvv4l2h264enc`, `nvjpegenc` with the actual
   R39.2.1 test driver libraries mounted into a disposable container.
 - No runtime OTA executable, CLI, pending update or manager update hook.
-- Cold startup, Unitree service manager, camera waiting state, child CMD,
+- Cold startup, Unitree service manager, camera waiting/blocked state, child CMD,
   clean SIGTERM, rootfs reuse after restart and failure on child-app exit.
 - Synthetic USB/sysfs tests: capture versus metadata, depth/interface/vendor
   filtering, multiple-camera rejection/serial selection, alias handling,
@@ -41,7 +41,11 @@ check only, not accelerated execution. No motion commands are issued.
 Record the image digest, app/base commit, Admiral init/BSP version, L4T driver
 manifest, robot firmware version, camera firmware and test date. Deploy the
 actual candidate **through Admiral**, not a manually assembled SSH/container
-setup. Keep the normal hardware checks enabled.
+setup. Require `unitree-g1-status check` to pass; a running workload with
+default warning-only startup is not a readiness pass. Set
+`ENV UNITREE_HARDWARE_CHECKS=1` in a production child image when startup must
+require a complete platform. An Orin Nano cannot pass stock video acceptance
+because it has no NVENC hardware.
 
 **Run all commands below inside the deployed workload**, through its shell or
 the SSH server in the image (after provisioning your key). This repository

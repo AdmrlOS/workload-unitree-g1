@@ -24,9 +24,20 @@ development, publishing, deployment, persistence and base-image upgrades.
 - Service supervision, optional user-application `CMD`, graceful shutdown,
   startup checks and diagnostics. A failed app exits the primary process so
   Admiral can restart it. No movement commands run at boot.
-- Key-only SSH on port 22, with **empty authorized-key files by default**.
-  Add your own keys in a child image; the repository's legacy example keys
-  are no longer copied into the shared base.
+- Key-only SSH on port 22 for `root` and `unitree-ssh`. At the owner's request,
+  this image includes the public key fetched from GitHub `alexanderturner` on
+  2026-09-28. Derived images inherit that access unless they replace/remove
+  both authorized-key files; see the [SSH instructions](docs/clean-slate.md).
+
+## Orin Nano development boards
+
+Orin Nano has no NVENC hardware encoder; NVIDIA intentionally does not register
+`nvv4l2h264enc` there. The stock Unitree video pipeline requires Orin NX.
+Startup diagnostics default to warnings so SSH and applications remain available
+on a development board. Camera state becomes `blocked` if required video
+elements are unavailable, and `unitree-g1-status check` continues to fail.
+Set `UNITREE_HARDWARE_CHECKS=1` in a child image for strict G1 startup enforcement.
+See [NVIDIA's explanation](https://docs.nvidia.com/jetson/archives/r36.5/DeveloperGuide/SD/Multimedia/SoftwareEncodeInOrinNano.html).
 
 ## Build and test
 
