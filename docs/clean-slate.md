@@ -55,7 +55,7 @@ are intentionally unavailable. Local version provenance remains available via
 | PC4 modules | master_service, patch 1.0.0.6, video hub 1.0.1.1; no runtime OTA |
 | Camera | D435i RGB, workload-owned `/dev/rlsen0`, warmup and reconnect handling |
 | NVIDIA video | `nvvidconv`, `nvv4l2h264enc`, `nvjpegenc`; matching multimedia/NvSci/VIC and JPEG runtime |
-| Robot LAN | Host networking, `eth0`, PC4 `192.168.123.164/24` |
+| Robot LAN | Host networking; Admiral-provisioned PC4 `192.168.123.164/24`; startup renames the physical PC1 NIC to `eth0` |
 | Entry process | `tini` → `start-unitree-g1` → vendor services and optional application |
 | Application command | Child Dockerfile exec-form `CMD`; inherited `ENTRYPOINT` remains |
 | Default application directory | `/opt/app`, explicitly selected at startup |
@@ -140,8 +140,11 @@ and Admiral registry configuration, never in the Dockerfile.
 
 ## How application startup behaves
 
-The base checks the platform and starts Unitree's service manager. By default,
-failed platform checks print warnings without stopping SSH or the application.
+The base first renames the physical robot NIC to `eth0` if necessary, then
+checks the platform and starts Unitree's service manager. The rename requires
+host networking and `CAP_NET_ADMIN`, briefly flaps the robot link, and refuses
+to touch the default-route NIC. By default, failed platform checks print
+warnings without stopping SSH or the application.
 `UNITREE_HARDWARE_CHECKS=1` makes a failed check stop startup; use this in a
 production G1 child image when the application must require the complete
 platform before starting. `unitree-g1-status check` always fails on unmet
@@ -167,6 +170,7 @@ Application configuration:
 | `UNITREE_CAMERA_SERIAL` | unset | Select one D435i if several match |
 | `UNITREE_WATCHDOG_INTERVAL` | `5` | Positive integer seconds between service checks |
 | `UNITREE_HARDWARE_CHECKS` | `warn` | Log platform failures and continue; `1` requires them to pass before starting services/apps; `0` skips startup inspection |
+| `UNITREE_NETWORK_RENAME_WAIT_SECONDS` | `10` | Wait up to this many seconds (0–60) for Admiral to provision the robot address before renaming; defaults to `0` when hardware checks are disabled for development |
 
 Prefer an unprivileged application account. The base's `admiral-video` group
 has numeric GID **28**, matching Admiral's GPU permissions. Dockerfile `USER`

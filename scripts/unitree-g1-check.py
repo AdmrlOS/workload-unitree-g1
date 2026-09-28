@@ -59,8 +59,8 @@ def lan():
     if robot != ['eth0']:
         actual = ', '.join(robot) if robot else 'no interface'
         raise RuntimeError(f'robot LAN 192.168.123.164/24 is on {actual}; Unitree video hub '
-                           'hardcodes eth0 for DDS and multicast. The G1 Admiral BSP must '
-                           'name the wired NIC eth0 before starting this workload.')
+                           'hardcodes eth0 for DDS and multicast. Workload startup should '
+                           'rename the physical PC1 NIC; inspect the startup log for why it did not.')
     route = json.loads(execute(['ip', '-j', 'route', 'get', '192.168.123.161']))
     if not route or route[0].get('dev') != 'eth0' or route[0].get('prefsrc') != '192.168.123.164':
         raise RuntimeError('PC1 192.168.123.161 must route over eth0 from 192.168.123.164')

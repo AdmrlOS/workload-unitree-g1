@@ -10,7 +10,7 @@ application userspace. It never flashes firmware or changes the host rootfs.
 | USB and camera driver | xHCI, UVC/V4L2, actual `/dev/video*` nodes, USB bus and sysfs | Identify the D435i RGB capture node; maintain `/dev/rlsen0`; warmup/reconnect |
 | NVIDIA hardware | Matching kernel modules, firmware, NVGPU/VIC/NVENC/NVJPG/NvSci devices | Matching multimedia/CUDA application libraries and video service |
 | GPU driver | Inject R39.2.1 NVGPU driver and companion libraries | No libcuda or duplicate injected companions |
-| Robot LAN | Wired NIC named `eth0`, IP `192.168.123.164/24`, multicast connectivity | Vendor CycloneDDS and H.264 on that NIC |
+| Robot LAN | Physical wired NIC, `192.168.123.164/24` and a PC1 route, host network namespace, `CAP_NET_ADMIN` | Rename the verified robot NIC to `eth0` at startup; vendor CycloneDDS and H.264 use that name |
 | Time | One clock owner, synchronized to PC1 as required | Report requirement; do not run conflicting clock daemons |
 | Wi-Fi/BT | G1 RTL8852BU driver, firmware, blacklist/autoload policy | Application connectivity through Admiral |
 | Audio | ALSA kernel drivers, stable card assignment and `/dev/snd` | Vendor ALSA configuration and amixer; validate card mapping |
@@ -83,24 +83,32 @@ the multimedia engines on the G1, not just CUDA compute on an Orin Nano.
 The vendor configuration expects `eth0`. Its DDS XML names `eth0`, and the
 closed `videohub_pc4` executable contains
 `udpsink host=230.1.1.1 port=1720 multicast-iface=eth0`. Changing only the XML
-cannot fix video egress. **Name the physical G1 wired NIC `eth0` in the BSP,
-before Admiral configures it or launches the workload.** On the inspected
+cannot fix video egress. On the inspected
 2026-09-28 NX BSP, that NIC was `enP8p1s0` with the correct
 `192.168.123.164/24` address and PC1 route; the video hub repeatedly exited
 because CycloneDDS could not find `eth0`.
 
-For the G1's single wired port, configure its network naming during the BSP
-build. One option is the boot argument `net.ifnames=0` if the kernel enumerates
-that port as `eth0`; a targeted early udev `.link` rule matched to the wired
-hardware is preferable if more Ethernet ports may be present. Ensure the
-Admiral network profile addresses the resulting `eth0`, and verify **after a
-cold boot** with `ip -brief addr show eth0`,
-`ip route get 192.168.123.161`, and `unitree-g1-status lan` inside the
-workload. Do not rename the active host NIC from this container: it shares the
-host network namespace and such a change can interrupt PC1 traffic and
-Admiral's network management. The camera supervisor reports `blocked` until
-this contract is met, rather than repeatedly warming and launching a video
-process that cannot join DDS.
+The Clean slate now performs the rename **inside workload startup, before
+Unitree services**. It discovers the single physical Ethernet port carrying
+`.164/24`, requires a working route to PC1 through that port, refuses to
+touch the default-route interface or an occupied `eth0`, briefly takes the
+robot link down to rename it, then brings it back up and verifies/repairs the
+PC1 address and route. It is idempotent across workload restarts. This is a
+host-network operation: the physical NIC is renamed for Admiral too, not only
+for processes in the image. The BSP still owns the NIC driver; provisioning
+must still put `.164/24` on the physical port before the workload starts.
+No additional udev daemon or host rootfs rule is needed for this workaround.
+
+The rename cannot be inferred when the robot address is absent, the port is
+down, or the default route uses it. Startup logs a warning and keeps SSH
+available in these cases; `unitree-g1-status lan` and readiness remain failed.
+On the NX, Wi-Fi owns the default route, so its management connection should
+remain up while the robot port is briefly renamed. Confirm on-device with
+`ip -brief addr show eth0`, `ip route get 192.168.123.161`, and
+`unitree-g1-status lan`. Check that Admiral's host network manager continues
+to preserve the address after a network reconfiguration or lease renewal;
+the immutable BSP's naming policy may be needed if it renames the port again.
+The camera supervisor reports `blocked` until the `eth0` contract is met.
 
 Provision `.164/24` before startup, without a
 competing default route on this point-to-point LAN; use another Admiral

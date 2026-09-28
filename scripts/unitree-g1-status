@@ -75,7 +75,7 @@ inspect)
 
     section "Network (expects hostNetwork: true — see docs/admiral-mapping.md)"
     ip -brief addr show 2>&1 || ifconfig 2>&1
-    echo "Expected static IP for this board (set at the Admiral network layer, not by this container): 192.168.123.164/24 on the physical eth0-equivalent NIC"
+    echo "Expected robot LAN: 192.168.123.164/24 on eth0; startup renames the physical PC1 NIC when needed"
     ip route show 2>&1 | grep -i 230.1.1.1 || echo "no explicit route for video multicast group 230.1.1.1 (may still work via default multicast handling)"
 
     section "Memory"

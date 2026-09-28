@@ -28,10 +28,11 @@ NVIDIA driver path. `hostNetwork: true` permits DDS and video multicast on
 the physical robot LAN. No Docker daemon, NVIDIA Toolkit flags, driver
 installation, custom GPU mounts or host udev file edits are required.
 
-The G1 BSP must name the physical wired NIC `eth0`, with
-`192.168.123.164/24`. The closed video hub hardcodes that name for DDS and
-H.264 multicast; a correctly addressed `enP8p1s0` still fails. Set the name
-at BSP boot, before Admiral configures the interface. The image checks L4T 39.2.1,
+Admiral must provision `192.168.123.164/24` on the physical wired NIC before
+launching this host-network workload. Startup renames that verified PC1 port
+to `eth0` when Ubuntu enumerated it differently; this requires `CAP_NET_ADMIN`
+and briefly interrupts the robot link. The closed video hub hardcodes `eth0`
+for DDS and H.264 multicast. The image checks L4T 39.2.1,
 resolved NVIDIA libraries, the three video plugins and robot network before
 starting the Unitree stack. By default, `UNITREE_HARDWARE_CHECKS=warn` logs
 failures and keeps SSH, the manager and the app available. Missing hardware

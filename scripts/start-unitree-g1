@@ -40,6 +40,17 @@ ssh-keygen -A
 /usr/sbin/sshd -D -e &
 SSHD_PID=$!
 
+# The vendor DDS XML and closed video hub require the literal name eth0.
+# Admiral may have already named/configured the physical robot port differently
+# when this host-network workload starts. Rename only the verified PC1 NIC.
+network_wait=${UNITREE_NETWORK_RENAME_WAIT_SECONDS:-10}
+if [[ "${UNITREE_HARDWARE_CHECKS:-warn}" == 0 && -z "${UNITREE_NETWORK_RENAME_WAIT_SECONDS:-}" ]]; then
+    network_wait=0
+fi
+if ! /usr/local/bin/unitree-g1-network.py --wait-seconds "$network_wait"; then
+    log 'WARNING: robot LAN rename did not complete; SSH remains available. Run unitree-g1-status lan for details.'
+fi
+
 # These stack-owned PID files can outlive a process on Admiral's reused rootfs.
 rm -f /unitree/var/run/master_service.pid \
     /unitree/var/run/videohub_pc4.pid /run/unitree-g1/camera.json "$GST_REGISTRY"

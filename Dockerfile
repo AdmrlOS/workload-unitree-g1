@@ -50,7 +50,7 @@ RUN --mount=type=cache,target=/downloads \
 FROM ${RUNTIME_IMAGE}
 ARG TARGETARCH
 RUN test "$TARGETARCH" = arm64
-ARG IMAGE_VERSION=2026-09-28-pc4-ubuntu26.04-r39.2.1-r7
+ARG IMAGE_VERSION=2026-09-28-pc4-ubuntu26.04-r39.2.1-r8
 LABEL org.opencontainers.image.title="unitree-g1" \
       org.opencontainers.image.description="Unitree G1 EDU PC4 userspace on Admiral, Ubuntu 26.04 / L4T R39.2.1" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
@@ -85,7 +85,7 @@ RUN curl -fSL --retry 5 "${OPENSSL11_DEB_URL}" -o /tmp/libssl1.1.deb \
     && echo "${OPENSSL11_DEB_SHA256}  /tmp/libssl1.1.deb" | sha256sum -c - \
     && dpkg -i /tmp/libssl1.1.deb && rm /tmp/libssl1.1.deb
 
-COPY scripts/start-unitree-g1 scripts/unitree-g1-status scripts/unitree-g1-camera.py scripts/unitree-g1-check.py /usr/local/bin/
+COPY scripts/start-unitree-g1 scripts/unitree-g1-status scripts/unitree-g1-camera.py scripts/unitree-g1-check.py scripts/unitree-g1-network.py /usr/local/bin/
 COPY config/ /opt/unitree-g1/config/
 COPY config/000-admiral-nvidia.conf /etc/ld.so.conf.d/000-admiral-nvidia.conf
 COPY ssh/sshd_config /etc/ssh/sshd_config
@@ -97,6 +97,7 @@ COPY docs/ /opt/unitree-g1/docs/
 RUN touch /root/.ssh/authorized_keys /home/unitree-ssh/.ssh/authorized_keys \
     && chmod 0755 /usr/local/bin/start-unitree-g1 /usr/local/bin/unitree-g1-status \
         /usr/local/bin/unitree-g1-camera.py /usr/local/bin/unitree-g1-check.py \
+        /usr/local/bin/unitree-g1-network.py \
     && printf '#!/bin/sh\nexec /usr/local/bin/unitree-g1-camera.py run >>/var/log/videohub-warmup.log 2>&1\n' > /unitree/module/video_hub_pc4/start_videohub.sh \
     && chmod 0755 /unitree/module/video_hub_pc4/start_videohub.sh \
     && chmod 0600 /root/.ssh/authorized_keys /home/unitree-ssh/.ssh/authorized_keys \

@@ -112,11 +112,13 @@ interface. The video hub failed CycloneDDS creation because its XML names
 multicast route were on Wi-Fi, so a DDS-only XML substitution would not
 establish the stock video path.
 
-The G1 BSP must provide the physical robot NIC as `eth0` before workload
-startup. The workload now reports the mismatch explicitly with
-`unitree-g1-status lan` and holds camera state `blocked` instead of repeating
-warmup and video-process exits. The live host network was not renamed: it is
-shared with Admiral and PC1, and the BSP must own its naming. The VictoriaLogs
+The workload now identifies the physical NIC carrying `.164/24`, renames it
+to `eth0` before Unitree starts, and validates the PC1 route. It refuses to
+rename a default-route interface or overwrite an existing `eth0`. This
+workaround affects Admiral's host network namespace and briefly interrupts
+the PC1 link; on failure it keeps SSH available and camera state `blocked`.
+The live host network was not manually renamed during development; the new
+image must be validated after deployment. The VictoriaLogs
 `missing _msg field` and Admiral's headless screen-capture warning are separate
 logging/UI messages, not causes of the video hub exit.
 

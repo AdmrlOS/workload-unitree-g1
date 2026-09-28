@@ -18,6 +18,8 @@ development, publishing, deployment, persistence and base-image upgrades.
 - Workload-owned D435i RGB discovery and `/dev/rlsen0` naming, frame warmup,
   USB reconnect handling and video-process recovery. No host udev rule or
   second udev daemon is required.
+- Workload startup names the physical PC1 Ethernet port `eth0` after Admiral
+  provisions `192.168.123.164/24`, and verifies the PC1 route before Unitree starts.
 - Pinned R39.2.1 GStreamer, multimedia, NvSci and VIC libraries, plus the
   CUDA runtime/nvJPEG libraries needed by the JPEG plugin. Admiral injects
   the GPU driver; no competing GPU driver is bundled.
@@ -66,10 +68,10 @@ NVIDIA driver fixture, are described in [validation](docs/validation.md).
 
 Use [the Admiral configuration](docs/admiral-mapping.md), keeping Command
 empty, `isolateDevices: false`, `hostNetwork: true`, `interactive: false`, and
-`readOnlyRoot: false`. The robot NIC must be `eth0`, `192.168.123.164/24`.
-The vendor video hub hardcodes `eth0` for DDS and multicast. The G1 BSP must
-provide that NIC name before the workload starts; the correct robot address
-on `enP8p1s0` is insufficient. See the [G1 BSP contract](docs/bsp-handoff.md)
+`readOnlyRoot: false`. Admiral must provision the physical robot NIC with
+`192.168.123.164/24` and permit `CAP_NET_ADMIN`. The workload renames it
+`eth0` when needed because the vendor video hub hardcodes that name for DDS
+and multicast. See the [G1 BSP contract](docs/bsp-handoff.md)
 for the naming, hardware, firmware and time requirements.
 
 `unitree-g1-status` is supplied by this image at `/usr/local/bin/unitree-g1-status`.
@@ -85,4 +87,5 @@ unitree-g1-status check
 test does not prove NVENC/VIC/JPEG execution, D435i cold boot/reconnect, robot
 app video reception, PC1 DDS interoperability, audio or clock synchronization.
 Use the [acceptance procedure](docs/validation.md) before promoting a base as
-an approved golden master. No robot was connected during this review.
+an approved golden master. The NIC was inspected on a live NX; this workload
+rename still needs its first on-device deployment test.
