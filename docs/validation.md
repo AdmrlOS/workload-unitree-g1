@@ -66,6 +66,7 @@ a Docker daemon on the robot.
    readlink -f /dev/rlsen0
    v4l2-ctl -d /dev/rlsen0 --list-formats-ext
    ip -brief address show eth0
+   unitree-g1-status lan
    ip route get 192.168.123.161
    ```
 
@@ -73,7 +74,9 @@ a Docker daemon on the robot.
    or `/run/admiral/nvidia/manifest.json` (inspected init implementation).
    The image supports both. Check camera USB SuperSpeed enumeration and
    YUY2 1920×1080 at 15 fps. Do not treat a kernel version string alone as
-   proof of a matching driver payload.
+   proof of a matching driver payload. The G1 BSP must name the physical wired
+   NIC `eth0`: the vendor binary uses that literal name for multicast as well
+   as DDS. The correct `.164` address on a different NIC name is insufficient.
 
    In the workload SSH session, confirm `libcuda.so.1` appears in `ldconfig -p`
    even when `LD_LIBRARY_PATH` is unset. The startup loader refresh must make

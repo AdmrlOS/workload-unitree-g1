@@ -101,6 +101,25 @@ in `blocked` when required elements are unavailable instead of launching the
 vendor pipeline. No software encoder is substituted for the stock service.
 The owner-requested GitHub public key is included for root and unitree-ssh.
 
+## 2026-09-28: G1 Orin NX camera restart report
+
+Live SSH inspection of the NX confirmed the D435i RGB capture node at
+`/dev/video4`, successful warmup, registered NVIDIA plugins, and the robot
+address `192.168.123.164/24` on `enP8p1s0`. PC1 `.161` routed through that
+interface. The video hub failed CycloneDDS creation because its XML names
+`eth0`; the proprietary binary also embeds
+`multicast-iface=eth0` in its GStreamer UDP pipeline. The default route and
+multicast route were on Wi-Fi, so a DDS-only XML substitution would not
+establish the stock video path.
+
+The G1 BSP must provide the physical robot NIC as `eth0` before workload
+startup. The workload now reports the mismatch explicitly with
+`unitree-g1-status lan` and holds camera state `blocked` instead of repeating
+warmup and video-process exits. The live host network was not renamed: it is
+shared with Admiral and PC1, and the BSP must own its naming. The VictoriaLogs
+`missing _msg field` and Admiral's headless screen-capture warning are separate
+logging/UI messages, not causes of the video hub exit.
+
 ## 2026-09-28: SSH plugin inspection on the live Nano
 
 The running workload was reachable over SSH and master_service responded.

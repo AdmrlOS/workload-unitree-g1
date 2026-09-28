@@ -67,7 +67,10 @@ NVIDIA driver fixture, are described in [validation](docs/validation.md).
 Use [the Admiral configuration](docs/admiral-mapping.md), keeping Command
 empty, `isolateDevices: false`, `hostNetwork: true`, `interactive: false`, and
 `readOnlyRoot: false`. The robot NIC must be `eth0`, `192.168.123.164/24`.
-See the [G1 BSP contract](docs/bsp-handoff.md) for hardware, firmware and time.
+The vendor video hub hardcodes `eth0` for DDS and multicast. The G1 BSP must
+provide that NIC name before the workload starts; the correct robot address
+on `enP8p1s0` is insufficient. See the [G1 BSP contract](docs/bsp-handoff.md)
+for the naming, hardware, firmware and time requirements.
 
 `unitree-g1-status` is supplied by this image at `/usr/local/bin/unitree-g1-status`.
 Run it **inside the deployed workload**, using a workload shell or its SSH service.

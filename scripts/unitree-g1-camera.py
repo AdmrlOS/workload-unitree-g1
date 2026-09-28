@@ -109,9 +109,11 @@ def terminate(child):
             child.wait()
 
 
-def run_child(command, candidate, serial, timeout=None):
+def run_child(command, candidate, serial, timeout=None, on_started=None):
     child = subprocess.Popen(command, start_new_session=True)
-    deadline = time.monotonic() + timeout if timeout else None
+    started = time.monotonic()
+    deadline = started + timeout if timeout else None
+    reported = False
     try:
         while not STOP.wait(0.5):
             if child.poll() is not None:
@@ -120,6 +122,9 @@ def run_child(command, candidate, serial, timeout=None):
                 return False
             if discover(serial=serial) != candidate:
                 return False
+            if on_started and not reported and time.monotonic() - started >= 2:
+                on_started()
+                reported = True
         return False
     finally:
         terminate(child)
@@ -128,9 +133,22 @@ def run_child(command, candidate, serial, timeout=None):
 def run(serial):
     previous = None
     video_ok = False
+    lan_ok = False
     try:
         while not STOP.is_set():
             try:
+                if not lan_ok:
+                    check = subprocess.run(['/usr/local/bin/unitree-g1-check.py', 'lan'],
+                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                           text=True, timeout=20)
+                    if check.returncode:
+                        message = check.stdout.strip()
+                        if previous != message:
+                            status('blocked', message)
+                            previous = message
+                        STOP.wait(30)
+                        continue
+                    lan_ok = True
                 if not video_ok:
                     check = subprocess.run(['/usr/local/bin/unitree-g1-check.py', 'video'],
                                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -164,9 +182,11 @@ def run(serial):
                     status('retrying', 'warmup did not deliver 45 frames; retry in 3s')
                     STOP.wait(3)
                     continue
-                status('running', f'vendor video hub on {camera[0]}; warmup passed')
+                status('starting', f'vendor video hub on {camera[0]}; warmup passed')
                 run_child(['stdbuf', '-oL', '/unitree/module/video_hub_pc4/videohub_pc4'],
-                          camera, serial)
+                          camera, serial,
+                          on_started=lambda: status('running', f'vendor video hub alive on {camera[0]}'))
+                lan_ok = False
                 video_ok = False
                 status('retrying', 'video hub exited or USB identity changed')
             except subprocess.TimeoutExpired:

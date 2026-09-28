@@ -90,6 +90,10 @@ platform)
     exec /usr/local/bin/unitree-g1-check.py platform
     ;;
 
+lan)
+    exec /usr/local/bin/unitree-g1-check.py lan
+    ;;
+
 video)
     exec /usr/local/bin/unitree-g1-check.py video
     ;;
@@ -108,7 +112,7 @@ camera)
     ;;
 
 *)
-    echo "Usage: unitree-g1-status [inspect|check|platform|video|services|modules|camera]" >&2
+    echo "Usage: unitree-g1-status [inspect|check|platform|lan|video|services|modules|camera]" >&2
     exit 2
     ;;
 esac

@@ -1,5 +1,6 @@
 """Hardware capability diagnostics without a Jetson or container startup."""
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -24,6 +25,21 @@ class VideoCapabilityTests(unittest.TestCase):
         self.assertFalse(check.is_orin_nano('3767-0000-0000 3768-0000-0000'))
         self.assertFalse(check.is_orin_nano('3767-0001-0000 3768-0000-0000'))
         self.assertFalse(check.is_orin_nano('unavailable'))
+
+    def test_robot_lan_rejects_predictable_name_even_with_correct_address(self):
+        addresses = [{'ifname': 'enP8p1s0', 'addr_info': [
+            {'local': '192.168.123.164', 'prefixlen': 24}]}]
+        with patch.object(check, 'execute', return_value=json.dumps(addresses)) as execute:
+            with self.assertRaisesRegex(RuntimeError, 'enP8p1s0.*hardcodes eth0'):
+                check.lan()
+            execute.assert_called_once()
+
+    def test_robot_lan_accepts_eth0_with_pc1_route(self):
+        addresses = [{'ifname': 'eth0', 'addr_info': [
+            {'local': '192.168.123.164', 'prefixlen': 24}]}]
+        route = [{'dev': 'eth0', 'prefsrc': '192.168.123.164'}]
+        with patch.object(check, 'execute', side_effect=[json.dumps(addresses), json.dumps(route)]):
+            check.lan()
 
 
 if __name__ == '__main__':

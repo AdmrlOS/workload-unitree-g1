@@ -80,8 +80,29 @@ the multimedia engines on the G1, not just CUDA compute on an Orin Nano.
 
 ## Robot LAN, time and audio
 
-The vendor configuration expects `eth0`. Its camera multicast interface is
-compiled into video hub. Provision `.164/24` before startup, without a
+The vendor configuration expects `eth0`. Its DDS XML names `eth0`, and the
+closed `videohub_pc4` executable contains
+`udpsink host=230.1.1.1 port=1720 multicast-iface=eth0`. Changing only the XML
+cannot fix video egress. **Name the physical G1 wired NIC `eth0` in the BSP,
+before Admiral configures it or launches the workload.** On the inspected
+2026-09-28 NX BSP, that NIC was `enP8p1s0` with the correct
+`192.168.123.164/24` address and PC1 route; the video hub repeatedly exited
+because CycloneDDS could not find `eth0`.
+
+For the G1's single wired port, configure its network naming during the BSP
+build. One option is the boot argument `net.ifnames=0` if the kernel enumerates
+that port as `eth0`; a targeted early udev `.link` rule matched to the wired
+hardware is preferable if more Ethernet ports may be present. Ensure the
+Admiral network profile addresses the resulting `eth0`, and verify **after a
+cold boot** with `ip -brief addr show eth0`,
+`ip route get 192.168.123.161`, and `unitree-g1-status lan` inside the
+workload. Do not rename the active host NIC from this container: it shares the
+host network namespace and such a change can interrupt PC1 traffic and
+Admiral's network management. The camera supervisor reports `blocked` until
+this contract is met, rather than repeatedly warming and launching a video
+process that cannot join DDS.
+
+Provision `.164/24` before startup, without a
 competing default route on this point-to-point LAN; use another Admiral
 interface for registry/internet access. PC1 is conventionally `.161`, and the
 patch's chrony file names `192.168.123.161` as its NTP server. Confirm this on

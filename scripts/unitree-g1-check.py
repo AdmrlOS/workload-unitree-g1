@@ -51,6 +51,22 @@ def video():
     print('PASS: required NVIDIA video elements register (not an encode test)', flush=True)
 
 
+def lan():
+    addresses = json.loads(execute(['ip', '-j', '-4', 'addr', 'show']))
+    robot = [iface['ifname'] for iface in addresses
+             for address in iface.get('addr_info', [])
+             if address.get('local') == '192.168.123.164' and address.get('prefixlen') == 24]
+    if robot != ['eth0']:
+        actual = ', '.join(robot) if robot else 'no interface'
+        raise RuntimeError(f'robot LAN 192.168.123.164/24 is on {actual}; Unitree video hub '
+                           'hardcodes eth0 for DDS and multicast. The G1 Admiral BSP must '
+                           'name the wired NIC eth0 before starting this workload.')
+    route = json.loads(execute(['ip', '-j', 'route', 'get', '192.168.123.161']))
+    if not route or route[0].get('dev') != 'eth0' or route[0].get('prefsrc') != '192.168.123.164':
+        raise RuntimeError('PC1 192.168.123.161 must route over eth0 from 192.168.123.164')
+    print('PASS: robot LAN eth0 / 192.168.123.164 reaches PC1', flush=True)
+
+
 def execute(command):
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, timeout=20)
@@ -123,16 +139,10 @@ def platform():
     data = json.loads(manifest.read_text())
     if data.get('l4t_version') != '39.2.1' or data.get('variant') != 'nvgpu':
         raise RuntimeError(f'expected L4T 39.2.1 NVGPU, got {data.get("l4t_version")} / {data.get("variant")}')
+    lan()
     check_libraries()
     ctypes.CDLL('libcuda.so.1', mode=os.RTLD_NOW | os.RTLD_LOCAL)
     video()
-    addresses = json.loads(execute(['ip', '-j', '-4', 'addr', 'show', 'dev', 'eth0']))
-    if not any(a.get('local') == '192.168.123.164' and a.get('prefixlen') == 24
-               for iface in addresses for a in iface['addr_info']):
-        raise RuntimeError('robot eth0 needs 192.168.123.164/24, hostNetwork: true')
-    route = json.loads(execute(['ip', '-j', 'route', 'get', '192.168.123.161']))
-    if not route or route[0].get('dev') != 'eth0':
-        raise RuntimeError('PC1 route must use eth0')
     print('PASS: R39.2.1 driver loads, video plugins register, robot network configured')
 
 
@@ -149,10 +159,10 @@ def ready():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['image', 'video', 'platform', 'ready'])
+    parser.add_argument('mode', choices=['image', 'video', 'lan', 'platform', 'ready'])
     args = parser.parse_args()
     try:
-        {'image': image, 'video': video, 'platform': platform, 'ready': ready}[args.mode]()
+        {'image': image, 'video': video, 'lan': lan, 'platform': platform, 'ready': ready}[args.mode]()
     except (OSError, RuntimeError, ValueError, KeyError, subprocess.SubprocessError) as exc:
         print(f'FAIL: {exc}', file=sys.stderr)
         return 1

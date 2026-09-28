@@ -91,19 +91,44 @@ class CameraTests(unittest.TestCase):
         with patch.object(camera, 'discover', return_value=None):
             self.assertFalse(camera.run_child(['sleep', '30'], ('old', ()), '', timeout=2))
 
+    def test_exiting_video_hub_never_reports_running(self):
+        camera.STOP.clear()
+        with patch.object(camera, 'discover') as discover:
+            started = []
+            self.assertTrue(camera.run_child(['true'], ('camera', ()), '',
+                                              on_started=lambda: started.append(True)))
+            self.assertEqual(started, [])
+            discover.assert_not_called()
+
     def test_missing_encoder_blocks_video_without_starting_capture(self):
         camera.STOP.clear()
         result = subprocess.CompletedProcess([], 1, 'Orin Nano has no NVENC')
+        lan = subprocess.CompletedProcess([], 0, 'PASS: robot LAN')
         def stop_after_wait(_):
             camera.STOP.set()
             return True
-        with patch.object(camera.subprocess, 'run', return_value=result), \
+        with patch.object(camera.subprocess, 'run', side_effect=[lan, result]), \
                 patch.object(camera.STOP, 'wait', side_effect=stop_after_wait), \
                 patch.object(camera, 'discover') as discover, \
                 patch.object(camera, 'run_child') as run_child, \
                 patch.object(camera, 'status') as status:
             camera.run('')
             status.assert_any_call('blocked', 'Orin Nano has no NVENC')
+            discover.assert_not_called()
+            run_child.assert_not_called()
+        camera.STOP.clear()
+
+    def test_wrong_robot_nic_blocks_before_camera_warmup(self):
+        camera.STOP.clear()
+        result = subprocess.CompletedProcess([], 1, 'robot LAN is enP8p1s0; eth0 required')
+        with patch.object(camera.subprocess, 'run', return_value=result) as checks, \
+                patch.object(camera.STOP, 'wait', side_effect=lambda _: camera.STOP.set() or True), \
+                patch.object(camera, 'discover') as discover, \
+                patch.object(camera, 'run_child') as run_child, \
+                patch.object(camera, 'status') as status:
+            camera.run('')
+            self.assertEqual(checks.call_args.args[0][-1], 'lan')
+            status.assert_any_call('blocked', 'robot LAN is enP8p1s0; eth0 required')
             discover.assert_not_called()
             run_child.assert_not_called()
         camera.STOP.clear()

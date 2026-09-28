@@ -50,7 +50,7 @@ RUN --mount=type=cache,target=/downloads \
 FROM ${RUNTIME_IMAGE}
 ARG TARGETARCH
 RUN test "$TARGETARCH" = arm64
-ARG IMAGE_VERSION=2026-09-28-pc4-ubuntu26.04-r39.2.1-r6
+ARG IMAGE_VERSION=2026-09-28-pc4-ubuntu26.04-r39.2.1-r7
 LABEL org.opencontainers.image.title="unitree-g1" \
       org.opencontainers.image.description="Unitree G1 EDU PC4 userspace on Admiral, Ubuntu 26.04 / L4T R39.2.1" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
