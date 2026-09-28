@@ -48,6 +48,18 @@
       "url": "https://repo.download.nvidia.com/jetson/common/pool/main/libn/libnvjpeg/libnvjpeg-13-2_13.1.0.59-1_arm64.deb",
       "sha256": "bcc60671b0a0ae7be7eede514b8483ab195aa8210cd1645a47af83d864c2b7f7",
       "version": "13.1.0.59-1"
+    },
+    {
+      "name": "nvidia-l4t-multimedia-nvgpu",
+      "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-multimedia-nvgpu/nvidia-l4t-multimedia-nvgpu_39.2.1-20260806224157_arm64.deb",
+      "sha256": "b55df254f1a5e185170b3d7c1a92fe6e3d812e30d849c7141e11647a7dbd55d4",
+      "version": "39.2.1-20260806224157"
+    },
+    {
+      "name": "nvidia-l4t-init",
+      "url": "https://repo.download.nvidia.com/jetson/som/pool/main/n/nvidia-l4t-init/nvidia-l4t-init_39.2.1-20260806224157_arm64.deb",
+      "sha256": "26cfc6b244ba3d3bbf424732a1ffe0d9e21faa0298eaacc911b7466b5bd76b93",
+      "version": "39.2.1-20260806224157"
     }
   ]
 }

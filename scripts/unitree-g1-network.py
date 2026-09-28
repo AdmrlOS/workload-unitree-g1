@@ -43,6 +43,20 @@ def pc1_route(name):
                 and routes[0].get('prefsrc') == ROBOT_ADDRESS)
 
 
+def wait_for_carrier(name, timeout=20):
+    # LinkSetUp returns before PHY autonegotiation finishes. The NX takes
+    # about 3.5 seconds; routes remain linkdown until LOWER_UP appears.
+    print(f'robot LAN waiting for Ethernet carrier on {name}', flush=True)
+    deadline = time.monotonic() + timeout
+    while True:
+        links = json.loads(command('ip', '-j', 'link', 'show', 'dev', name))
+        if len(links) == 1 and {'UP', 'LOWER_UP'} <= set(links[0].get('flags', [])):
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f'Ethernet carrier did not recover on {name} within {timeout}s')
+        time.sleep(0.5)
+
+
 def repair_pc1_route(name, metric):
     if name not in robot_interfaces():
         try:
@@ -99,12 +113,7 @@ def rename_robot_lan():
         command('ip', 'link', 'set', 'dev', source, 'name', 'eth0')
         renamed = True
         command('ip', 'link', 'set', 'dev', 'eth0', 'up')
-        # Give Admiral's host network manager a chance to preserve/reapply its
-        # address and route before repairing only the robot subnet ourselves.
-        for _ in range(3):
-            if robot_interfaces() == ['eth0'] and pc1_route('eth0'):
-                break
-            time.sleep(1)
+        wait_for_carrier('eth0')
         repair_pc1_route('eth0', metric)
     except Exception:
         # Restore the original name and PC1 path if validation fails. Do not
@@ -115,6 +124,7 @@ def rename_robot_lan():
             if renamed:
                 command('ip', 'link', 'set', 'dev', 'eth0', 'name', source)
             command('ip', 'link', 'set', 'dev', source, 'up')
+            wait_for_carrier(source)
             repair_pc1_route(source, metric)
         except Exception as rollback_error:
             print(f'WARNING: robot LAN rollback failed: {rollback_error}', file=sys.stderr, flush=True)

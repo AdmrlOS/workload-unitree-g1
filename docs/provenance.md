@@ -82,6 +82,13 @@ staging directory, then copies an explicit userspace subset plus package
 licenses. It never executes NVIDIA package scripts. The three required
 GStreamer plugins are selected, excluding unrelated CSI/Argus/SIPL plugins.
 The NVIDIA V4L2 dispatcher is selected through the loader configuration.
+`nvidia-l4t-multimedia-nvgpu` supplies `libtegrav4l2.so`,
+`libv4l2_nvvideocodec.so`, and its discovery link under `libv4l/plugins/nv`.
+These are needed for encoding even when `gst-inspect` registers the encoder.
+The pinned `nvidia-l4t-init` package contributes only license material and
+`99-tegra-devices.rules` as a reference under `/opt/unitree-g1`; its systemd
+services, host rules and maintainer scripts are not installed or executed.
+The workload explicitly implements its guarded NVENC dispatch-node rule.
 
 Local modifications remove the entire runtime OTA path (service, CLI, update
 payloads, live and backup configuration, and startup hooks), replace camera

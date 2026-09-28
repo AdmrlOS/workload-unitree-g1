@@ -48,7 +48,13 @@ def video():
             raise RuntimeError(f'{exc}\nOn Orin Nano, nvv4l2h264enc is unavailable because it has '
                                'no NVENC engine. On Orin NX, inspect the NVIDIA plugin, driver '
                                'and BSP device access with unitree-g1-status inspect.') from exc
-    print('PASS: required NVIDIA video elements register (not an encode test)', flush=True)
+    if not Path('/dev/v4l2-nvenc').is_char_device():
+        raise RuntimeError('/dev/v4l2-nvenc is missing; workload startup must initialize the '
+                           'NVIDIA dispatch node after tegra-nvenc binds. Inspect the startup log.')
+    codec = LIB / 'libv4l/plugins/nv/libv4l2_nvvideocodec.so'
+    if not codec.is_file():
+        raise RuntimeError(f'NVGPU codec dispatch plugin missing: {codec}')
+    print('PASS: NVIDIA video elements, codec dispatch plugin and encoder node present (not an encode test)', flush=True)
 
 
 def lan():
@@ -64,7 +70,7 @@ def lan():
     route = json.loads(execute(['ip', '-j', 'route', 'get', '192.168.123.161']))
     if not route or route[0].get('dev') != 'eth0' or route[0].get('prefsrc') != '192.168.123.164':
         raise RuntimeError('PC1 192.168.123.161 must route over eth0 from 192.168.123.164')
-    print('PASS: robot LAN eth0 / 192.168.123.164 reaches PC1', flush=True)
+    print('PASS: robot LAN eth0 / 192.168.123.164 has the PC1 route (not a peer response test)', flush=True)
 
 
 def execute(command):
@@ -82,6 +88,8 @@ def check_libraries(build=False):
     paths += [LIB / 'gstreamer-1.0' / f'libgst{name}.so'
               for name in ('nvvidconv', 'nvvideo4linux2', 'nvjpeg')]
     paths += [LIB / 'libnvjpeg.so.13', LIB / 'libcudart.so.13']
+    paths += [LIB / 'libv4l/plugins/nv/libv4l2_nvvideocodec.so',
+              LIB / 'nvidia/libtegrav4l2.so']
     # NVIDIA opens several encoder/VIC/NvSci backends with dlopen. Checking
     # just the application's ldd output does not cover those dependencies.
     paths += [LIB / 'nvidia' / name for name in (

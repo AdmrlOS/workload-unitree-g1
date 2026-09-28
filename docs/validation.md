@@ -77,6 +77,9 @@ a Docker daemon on the robot.
    proof of a matching driver payload. Startup must rename the physical wired
    NIC to `eth0`: the vendor binary uses that literal name for multicast as
    well as DDS. Confirm the name and PC1 route after each deployment.
+   Confirm `/dev/v4l2-nvenc` exists and the NVGPU codec plugin resolves under
+   `/usr/lib/aarch64-linux-gnu/libv4l/plugins/nv/`. Plugin registration alone
+   does not check either of these runtime prerequisites.
 
    In the workload SSH session, confirm `libcuda.so.1` appears in `ldconfig -p`
    even when `LD_LIBRARY_PATH` is unset. The startup loader refresh must make

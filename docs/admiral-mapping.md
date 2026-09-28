@@ -30,7 +30,7 @@ installation, custom GPU mounts or host udev file edits are required.
 
 Admiral must provision `192.168.123.164/24` on the physical wired NIC before
 launching this host-network workload. Startup renames that verified PC1 port
-to `eth0` when Ubuntu enumerated it differently; this requires `CAP_NET_ADMIN`
+to `eth0` when boot-time naming gave it another name; this requires `CAP_NET_ADMIN`
 and briefly interrupts the robot link. The closed video hub hardcodes `eth0`
 for DDS and H.264 multicast. The image checks L4T 39.2.1,
 resolved NVIDIA libraries, the three video plugins and robot network before

@@ -24,6 +24,12 @@ class FakeIP:
         self.operations = []
         self.fail_rename = False
         self.fail_route_replace_once = False
+        self.clock = 0
+        self.carrier_delay = 0
+        self.carrier_at = 0
+
+    def sleep(self, seconds):
+        self.clock += seconds
 
     def __call__(self, *args):
         self.operations.append(args)
@@ -34,6 +40,11 @@ class FakeIP:
         if args == ('ip', '-j', '-d', 'link', 'show'):
             return json.dumps([{'ifname': self.name, 'link_type': 'ether',
                                 'flags': ['UP'] if self.up else [], 'parentbus': 'pci'}])
+        if args == ('ip', '-j', 'link', 'show', 'dev', self.name):
+            flags = ['UP'] if self.up else []
+            if self.up and self.clock >= self.carrier_at:
+                flags.append('LOWER_UP')
+            return json.dumps([{'ifname': self.name, 'flags': flags}])
         if args == ('ip', '-j', '-4', 'route', 'get', network.PC1_ADDRESS):
             return json.dumps([{'dev': self.name if self.route else self.default,
                                 'prefsrc': network.ROBOT_ADDRESS if self.route else '192.168.15.154'}])
@@ -50,6 +61,7 @@ class FakeIP:
                 return ''
             if args[-1] == 'up':
                 self.up = True
+                self.carrier_at = self.clock + self.carrier_delay
                 return ''
             if args[-2:] == ('name', 'eth0'):
                 if self.fail_rename:
@@ -74,7 +86,8 @@ class FakeIP:
 class RobotNetworkTests(unittest.TestCase):
     def run_with(self, fake):
         with patch.object(network, 'command', side_effect=fake), \
-                patch.object(network.time, 'sleep'):
+                patch.object(network.time, 'sleep', side_effect=fake.sleep), \
+                patch.object(network.time, 'monotonic', side_effect=lambda: fake.clock):
             return network.rename_robot_lan()
 
     def test_renames_only_verified_robot_port(self):
@@ -120,6 +133,33 @@ class RobotNetworkTests(unittest.TestCase):
         fake = FakeIP(name='eth0')
         self.assertTrue(self.run_with(fake))
         self.assertFalse(any(op[:2] == ('ip', 'link') for op in fake.operations))
+
+    def test_nx_carrier_recovery_longer_than_three_seconds_does_not_rollback(self):
+        fake = FakeIP(lose_config=True)
+        fake.carrier_delay = 4
+        self.assertTrue(self.run_with(fake))
+        self.assertEqual(fake.name, 'eth0')
+        self.assertEqual(fake.clock, 4)
+        self.assertNotIn(('ip', 'link', 'set', 'dev', 'eth0', 'name', 'enP8p1s0'), fake.operations)
+
+    def test_rollback_also_waits_for_carrier(self):
+        fake = FakeIP(lose_config=True)
+        fake.carrier_delay = 4
+        fake.fail_route_replace_once = True
+        with self.assertRaisesRegex(RuntimeError, 'route replace denied'):
+            self.run_with(fake)
+        self.assertEqual((fake.name, fake.clock, fake.address, fake.route),
+                         ('enP8p1s0', 8, True, True))
+
+    def test_carrier_wait_has_a_deadline(self):
+        fake = FakeIP()
+        fake.carrier_at = 100
+        with patch.object(network, 'command', side_effect=fake), \
+                patch.object(network.time, 'sleep', side_effect=fake.sleep), \
+                patch.object(network.time, 'monotonic', side_effect=lambda: fake.clock):
+            with self.assertRaisesRegex(RuntimeError, 'carrier did not recover'):
+                network.wait_for_carrier(fake.name, timeout=2)
+        self.assertEqual(fake.clock, 2)
 
 
 if __name__ == '__main__':

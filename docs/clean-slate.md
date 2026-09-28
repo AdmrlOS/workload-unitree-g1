@@ -54,7 +54,7 @@ are intentionally unavailable. Local version provenance remains available via
 | Platform pairing | G1-specific Admiral BSP, L4T 39.2.1 NVGPU |
 | PC4 modules | master_service, patch 1.0.0.6, video hub 1.0.1.1; no runtime OTA |
 | Camera | D435i RGB, workload-owned `/dev/rlsen0`, warmup and reconnect handling |
-| NVIDIA video | `nvvidconv`, `nvv4l2h264enc`, `nvjpegenc`; matching multimedia/NvSci/VIC and JPEG runtime |
+| NVIDIA video | `nvvidconv`, `nvv4l2h264enc`, `nvjpegenc`; matching multimedia/NvSci/VIC, NVGPU codec plugin, NVENC dispatch-node initialization and JPEG runtime |
 | Robot LAN | Host networking; Admiral-provisioned PC4 `192.168.123.164/24`; startup renames the physical PC1 NIC to `eth0` |
 | Entry process | `tini` → `start-unitree-g1` → vendor services and optional application |
 | Application command | Child Dockerfile exec-form `CMD`; inherited `ENTRYPOINT` remains |
@@ -141,7 +141,8 @@ and Admiral registry configuration, never in the Dockerfile.
 ## How application startup behaves
 
 The base first renames the physical robot NIC to `eth0` if necessary, then
-checks the platform and starts Unitree's service manager. The rename requires
+initializes NVIDIA's encoder dispatch endpoint, checks the platform and starts
+Unitree's service manager. The rename requires
 host networking and `CAP_NET_ADMIN`, briefly flaps the robot link, and refuses
 to touch the default-route NIC. By default, failed platform checks print
 warnings without stopping SSH or the application.

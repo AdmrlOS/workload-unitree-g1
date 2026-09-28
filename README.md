@@ -23,6 +23,8 @@ development, publishing, deployment, persistence and base-image upgrades.
 - Pinned R39.2.1 GStreamer, multimedia, NvSci and VIC libraries, plus the
   CUDA runtime/nvJPEG libraries needed by the JPEG plugin. Admiral injects
   the GPU driver; no competing GPU driver is bundled.
+- NVGPU V4L2 codec dispatch plugin and workload-owned NVENC endpoint setup,
+  matching NVIDIA's R39.2.1 device rule after the real encoder driver binds.
 - Service supervision, optional user-application `CMD`, graceful shutdown,
   startup checks and diagnostics. A failed app exits the primary process so
   Admiral can restart it. No movement commands run at boot.
@@ -87,5 +89,6 @@ unitree-g1-status check
 test does not prove NVENC/VIC/JPEG execution, D435i cold boot/reconnect, robot
 app video reception, PC1 DDS interoperability, audio or clock synchronization.
 Use the [acceptance procedure](docs/validation.md) before promoting a base as
-an approved golden master. The NIC was inspected on a live NX; this workload
-rename still needs its first on-device deployment test.
+an approved golden master. The corrected rename and encoder initialization
+were tested live on the NX; cold-boot deployment and robot-app reception still
+need validation.

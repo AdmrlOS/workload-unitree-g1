@@ -26,6 +26,16 @@ class VideoCapabilityTests(unittest.TestCase):
         self.assertFalse(check.is_orin_nano('3767-0001-0000 3768-0000-0000'))
         self.assertFalse(check.is_orin_nano('unavailable'))
 
+    def test_registered_plugins_do_not_hide_missing_encoder_node(self):
+        board = {'model': 'Orin NX', 'chosen/ids': '3767-0000-303'}
+        with patch.object(check, 'board_info', return_value=board), \
+                patch.object(check, 'execute') as execute, \
+                patch.object(check, 'Path') as path:
+            path.return_value.is_char_device.return_value = False
+            with self.assertRaisesRegex(RuntimeError, '/dev/v4l2-nvenc is missing'):
+                check.video()
+            self.assertEqual(execute.call_count, len(check.PLUGINS))
+
     def test_robot_lan_rejects_predictable_name_even_with_correct_address(self):
         addresses = [{'ifname': 'enP8p1s0', 'addr_info': [
             {'local': '192.168.123.164', 'prefixlen': 24}]}]

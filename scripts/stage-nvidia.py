@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assemble pinned multimedia userspace; never install NVIDIA host packages.
 
-Only library payloads and licenses are copied. No maintainer scripts, kernel,
+Only library payloads, licenses and a device-rule reference are copied. No maintainer scripts, kernel,
 firmware, systemd services, graphics driver or libcuda enters the image.
 """
 import argparse
@@ -27,6 +27,7 @@ def main():
         if name not in {'nvidia-l4t-gstreamer', 'nvidia-l4t-multimedia',
                         'nvidia-l4t-multimedia-utils', 'nvidia-l4t-nvsci',
                         'nvidia-l4t-adaruntime', 'nvidia-l4t-core',
+                        'nvidia-l4t-multimedia-nvgpu', 'nvidia-l4t-init',
                         'libnvjpeg-13-2', 'cuda-cudart-13-2'}:
             raise ValueError(f'not a permitted application package: {name}')
         deb = args.assets / f'{name}.deb'
@@ -63,6 +64,13 @@ def main():
             elif name == 'nvidia-l4t-core':
                 # Additional multimedia backends absent from Admiral's compute payload.
                 paths = [lib / 'nvidia' / n for n in ('libnvrm_stream.so', 'libnvddk_vic.so', 'libnvvic.so', 'libnvddk_2d_v2.so', 'libnvcolorutil.so')]
+            elif name == 'nvidia-l4t-init':
+                # Audit only: do not install the host's services or run its
+                # broad udev rules. Our device helper applies the NVENC rule.
+                rule = args.output / 'opt/unitree-g1/vendor-tegra-devices.rules'
+                rule.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(root / 'etc/udev/rules.d/99-tegra-devices.rules', rule)
+                paths = []
             else:
                 paths = [lib]
             if not name.startswith(('libnvjpeg-', 'cuda-cudart-')):

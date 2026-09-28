@@ -56,9 +56,20 @@ Host rootfs immutability does not prevent creating a symlink in devtmpfs.
 
 Expose the actual R39.2.1 kernel's NVMM/VIC/NVENC/JPEG and NvSci interfaces,
 including `/dev/nvmap`, GPU/host1x controls, and the relevant `nvhost-*`
-engine nodes. Names can differ by kernel; compare actual engine devices to
-a vendor-flashed G1. Pass `/dev/snd` and USB bus devices too. Never fake
-major/minor numbers. `/dev/nvidia0` is not an Orin readiness test.
+engine interfaces. Names can differ by kernel; compare actual engine devices to
+a vendor-flashed G1. Pass `/dev/snd` and USB bus devices too.
+
+For R39.2.1's upstream `tegra-nvenc` driver, NVIDIA's `99-tegra-devices.rules`
+explicitly creates `/dev/v4l2-nvenc` as character device **1:3** on driver bind.
+This is a userspace dispatch endpoint: the NVGPU V4L2 plugin handles its
+operations and accesses the real encoder through the kernel's DRM/host1x
+interfaces. It is not a fabricated hardware driver or the encoder's own
+major/minor. Startup's `unitree-g1-devices.py` applies that exact endpoint rule
+only when `154c0000.nvenc` is bound to `tegra-nvenc`, with root:28 and mode
+0660. It refuses to overwrite an unexpected file or symlink. The original
+rule is retained at `/opt/unitree-g1/vendor-tegra-devices.rules`.
+No arbitrary device numbers or fake hardware nodes are used.
+`/dev/nvidia0` is not an Orin readiness test.
 
 `config/nvidia-packages.json` pins application libraries. The extra
 `libnvrm_stream`, VIC and 2D helper libraries are selected from `l4t-core`
@@ -93,7 +104,9 @@ Unitree services**. It discovers the single physical Ethernet port carrying
 `.164/24`, requires a working route to PC1 through that port, refuses to
 touch the default-route interface or an occupied `eth0`, briefly takes the
 robot link down to rename it, then brings it back up and verifies/repairs the
-PC1 address and route. It is idempotent across workload restarts. This is a
+PC1 address and route. It waits up to 20 seconds for actual Ethernet carrier
+after link-up, including on rollback; the inspected NX needs about 3.5 seconds
+to renegotiate. It is idempotent across workload restarts. This is a
 host-network operation: the physical NIC is renamed for Admiral too, not only
 for processes in the image. The BSP still owns the NIC driver; provisioning
 must still put `.164/24` on the physical port before the workload starts.

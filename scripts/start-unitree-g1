@@ -20,9 +20,8 @@ cleanup() {
         kill -KILL -- "-$APP_PID" 2>/dev/null || true
         wait "$APP_PID" 2>/dev/null || true
     fi
-    for pid in "$SSHD_PID" "$LOG_PID"; do
-        [[ -z "$pid" ]] || kill "$pid" 2>/dev/null || true
-    done
+    [[ -z "$SSHD_PID" ]] || kill "$SSHD_PID" 2>/dev/null || true
+    [[ -z "$LOG_PID" ]] || kill -TERM -- "-$LOG_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 trap 'exit 0' TERM INT
@@ -47,8 +46,11 @@ network_wait=${UNITREE_NETWORK_RENAME_WAIT_SECONDS:-10}
 if [[ "${UNITREE_HARDWARE_CHECKS:-warn}" == 0 && -z "${UNITREE_NETWORK_RENAME_WAIT_SECONDS:-}" ]]; then
     network_wait=0
 fi
-if ! /usr/local/bin/unitree-g1-network.py --wait-seconds "$network_wait"; then
+if ! /usr/local/bin/unitree-g1-network.py --wait-seconds "$network_wait" 2>&1 | tee -a /var/log/unitree-g1/boot.log; then
     log 'WARNING: robot LAN rename did not complete; SSH remains available. Run unitree-g1-status lan for details.'
+fi
+if ! /usr/local/bin/unitree-g1-devices.py 2>&1 | tee -a /var/log/unitree-g1/boot.log; then
+    log 'WARNING: NVENC device is not ready; SSH remains available. Run unitree-g1-status video for details.'
 fi
 
 # These stack-owned PID files can outlive a process on Admiral's reused rootfs.
@@ -68,7 +70,8 @@ esac
 # Follow module logs into Admiral's dashboard. Do not pipe daemon launches
 # through tee: their inherited descriptors would leave the pipe open forever.
 touch /var/log/videohub-warmup.log
-tail -n 0 -F /var/log/videohub-warmup.log &
+# Empty vendor lines become empty messages in Admiral's log ingestion.
+setsid bash -o pipefail -c 'tail -n 0 -F /var/log/videohub-warmup.log | sed -u "/^[[:space:]]*$/d"' &
 LOG_PID=$!
 log 'starting master_service (software updates are managed by Admiral)'
 /etc/init.d/master_service start >>/var/log/unitree-g1/boot.log 2>&1

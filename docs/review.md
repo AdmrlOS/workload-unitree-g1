@@ -117,10 +117,30 @@ to `eth0` before Unitree starts, and validates the PC1 route. It refuses to
 rename a default-route interface or overwrite an existing `eth0`. This
 workaround affects Admiral's host network namespace and briefly interrupts
 the PC1 link; on failure it keeps SSH available and camera state `blocked`.
-The live host network was not manually renamed during development; the new
-image must be validated after deployment. The VictoriaLogs
-`missing _msg field` and Admiral's headless screen-capture warning are separate
-logging/UI messages, not causes of the video hub exit.
+The first rename implementation rolled back too early: a three-second wait
+expired before the NIC regained carrier at about 3.5 seconds. The corrected
+helper waits for `LOWER_UP` for up to 20 seconds and was verified live on the
+NX with `.164/24` and the PC1 route intact. Its full output is now retained
+in the workload boot log as well as stdout.
+
+After the rename, GStreamer diagnostics exposed a second fault: missing
+`/dev/v4l2-nvenc`. NVIDIA's R39.2.1 initialization rules create this userspace
+dispatch node as 1:3 when `tegra-nvenc` binds. Applying that rule exposed a
+missing `nvidia-l4t-multimedia-nvgpu` codec plugin. Both are now included in
+the workload. Live validation showed sustained 720p and 360p H.264 encoder
+activity and a passing readiness check. An independent synthetic JPEG
+pipeline produced a 25,582-byte JPEG with valid SOI/EOI markers. A multicast
+receiver joined on `.164` received 3,637 RTP packets with distinct sequence
+numbers in five seconds. Stock DDS JPEG and external robot-app reception
+still need a client.
+Vendor sample counters alone are not proof of encoded output.
+
+Empty vendor log lines are filtered before forwarding to Admiral, avoiding
+empty messages associated with VictoriaLogs' `missing _msg field` reports.
+The raw camera log is retained. Admiral's headless screen-capture warning is
+separate from the video pipeline.
+Camera children default to GStreamer warning/error diagnostics with colors
+disabled, so future pipeline failures retain their underlying cause.
 
 ## 2026-09-28: SSH plugin inspection on the live Nano
 

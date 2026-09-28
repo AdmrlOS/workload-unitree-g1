@@ -110,7 +110,12 @@ def terminate(child):
 
 
 def run_child(command, candidate, serial, timeout=None, on_started=None):
-    child = subprocess.Popen(command, start_new_session=True)
+    environment = os.environ.copy()
+    # The vendor reports only "An error occurred" for pipeline failures.
+    # Include GStreamer's actual warning/error cause, without ANSI log codes.
+    environment.setdefault('GST_DEBUG', '2')
+    environment.setdefault('GST_DEBUG_NO_COLOR', '1')
+    child = subprocess.Popen(command, start_new_session=True, env=environment)
     started = time.monotonic()
     deadline = started + timeout if timeout else None
     reported = False
