@@ -70,8 +70,10 @@ esac
 # Follow module logs into Admiral's dashboard. Do not pipe daemon launches
 # through tee: their inherited descriptors would leave the pipe open forever.
 touch /var/log/videohub-warmup.log
-# Empty vendor lines become empty messages in Admiral's log ingestion.
-setsid bash -o pipefail -c 'tail -n 0 -F /var/log/videohub-warmup.log | sed -u "/^[[:space:]]*$/d"' &
+# Keep the raw vendor output on disk for diagnosis. Only the dashboard stream
+# drops empty lines, per-second sample counters and routine V4L2 frame-loss
+# warnings; pipeline errors and camera state changes remain visible.
+setsid bash -o pipefail -c 'tail -n 0 -F /var/log/videohub-warmup.log | sed -u -E -e "/^[[:space:]]*$/d" -e "/\[videohub\] sample1080pCount=[0-9]+, sample720pCount=[0-9]+, sample360pCount=[0-9]+, second=[0-9]+/d" -e "/WARN[[:space:]]+v4l2src.*lost frames detected: count = [0-9]+/d"' &
 LOG_PID=$!
 log 'starting master_service (software updates are managed by Admiral)'
 /etc/init.d/master_service start >>/var/log/unitree-g1/boot.log 2>&1
