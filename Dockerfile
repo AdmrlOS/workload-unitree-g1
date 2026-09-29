@@ -89,9 +89,6 @@ COPY scripts/start-unitree-g1 scripts/unitree-g1-status scripts/unitree-g1-camer
 COPY config/ /opt/unitree-g1/config/
 COPY config/000-admiral-nvidia.conf /etc/ld.so.conf.d/000-admiral-nvidia.conf
 COPY ssh/sshd_config /etc/ssh/sshd_config
-# Snapshot of https://github.com/alexanderturner.keys, requested by the owner.
-COPY ssh/authorized_keys /root/.ssh/authorized_keys
-COPY ssh/authorized_keys /home/unitree-ssh/.ssh/authorized_keys
 COPY README.md /opt/unitree-g1/README.md
 COPY docs/ /opt/unitree-g1/docs/
 RUN touch /root/.ssh/authorized_keys /home/unitree-ssh/.ssh/authorized_keys \

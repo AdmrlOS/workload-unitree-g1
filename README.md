@@ -28,10 +28,9 @@ development, publishing, deployment, persistence and base-image upgrades.
 - Service supervision, optional user-application `CMD`, graceful shutdown,
   startup checks and diagnostics. A failed app exits the primary process so
   Admiral can restart it. No movement commands run at boot.
-- Key-only SSH on port 22 for `root` and `unitree-ssh`. At the owner's request,
-  this image includes the public key fetched from GitHub `alexanderturner` on
-  2026-09-28. Derived images inherit that access unless they replace/remove
-  both authorized-key files; see the [SSH instructions](docs/clean-slate.md).
+- Key-only SSH on port 22 for `root` and `unitree-ssh`. Authorized-key files
+  are empty in this clean-slate image; the derived workload supplies its own
+  keys. See the [SSH instructions](docs/clean-slate.md).
 
 ## Orin Nano development boards
 

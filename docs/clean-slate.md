@@ -332,25 +332,19 @@ workload**, `/usr/local/bin/unitree-g1-status inspect` collects process, camera,
 network and library diagnostics. This repository supplies that command in the
 image; neither the host OS nor the kernel must provide it. `check` returns
 nonzero for unmet readiness; it still cannot prove remote frame reception.
-This build includes the owner-requested `alexanderturner` GitHub public key
-(snapshot fetched 2026-09-28), fingerprint
-`SHA256:yp9F51C0Pp4QoSw3WbEKDpSsnGoh0n0UXjK/p6qqCUE`.
-Connect with your matching private key using `ssh root@BOARD_IP` or
-`ssh unitree-ssh@BOARD_IP`. The G1 robot-LAN address is `192.168.123.164`;
-on a development board use its actual reachable IP.
-
-Derived images inherit this key. To provision different access, replace **both**
-key files in the child Dockerfile:
+The clean-slate image starts SSH with empty authorized-key files. Provision
+the desired public keys in **both** accounts in the derived image:
 
 ```dockerfile
 COPY --chmod=0600 authorized_keys /root/.ssh/authorized_keys
 COPY --chown=unitree-ssh:unitree-ssh --chmod=0600 authorized_keys /home/unitree-ssh/.ssh/authorized_keys
 ```
 
-Remove both files' contents to disable authorized SSH access. Password login
-remains disabled. GitHub is not contacted at boot or build: changing GitHub keys
-requires updating the committed snapshot and deploying a rebuilt image. Port 22 is on the host
-network; ensure Admiral's management setup does not occupy the same port.
+Connect with a matching private key using `ssh root@BOARD_IP` or
+`ssh unitree-ssh@BOARD_IP`. The G1 robot-LAN address is `192.168.123.164`;
+on a development board use its actual reachable IP. Password login remains
+disabled. Port 22 is on the host network; ensure Admiral's management setup
+does not occupy the same port.
 Provisioning durable SSH host keys can use an application-specific persistent
 location, without mounting over all of `/etc/ssh` and hiding its configuration.
 

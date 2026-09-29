@@ -38,7 +38,7 @@ Sources inspected:
 | Root process watched only master_service and SSH | App failure could be hidden | Watch the manager, SSH and optional foreground app; structured teardown |
 | PC4 could update itself via Unitree OTA | Runtime changes diverged from the published OCI image | Remove updater, CLI, pending payloads and live/backup startup hooks; Admiral owns deployment |
 | PID files survive Admiral's reused rootfs | Restart could act on stale process IDs | Remove stack-owned stale PID files before service startup |
-| SSH access must be explicit | Derived apps inherit base authorized keys | Owner requested GitHub alexanderturner key on 2026-09-28; pinned snapshot installed in both accounts, inheritance documented |
+| SSH access must be explicit | A common base key would grant access to every derived app | Base ships empty authorized-key files; each derived workload supplies its own keys |
 | No child-image application contract | Easy to bypass robot startup with ENTRYPOINT | Exec-form child CMD, supervised process group, explicit working directory and optional privilege drop |
 | ARM64 service status was checked under x64/QEMU | Vendor process inspection can misidentify a live process | Native ARM64 build; remove runtime test gates from publication as requested |
 | Documentation treated workload-created device aliases as impossible | Incorrect platform boundary | Corrected BSP/OCI contract and deployment instructions |
@@ -99,7 +99,7 @@ SSH/services/apps available. Strict `UNITREE_HARDWARE_CHECKS=1` and explicit
 readiness still fail; no video capability is fabricated. Camera startup waits
 in `blocked` when required elements are unavailable instead of launching the
 vendor pipeline. No software encoder is substituted for the stock service.
-The owner-requested GitHub public key is included for root and unitree-ssh.
+The owner-requested keys are supplied by the derived R4H workload; the clean-slate image has empty authorized-key files.
 
 ## 2026-09-28: G1 Orin NX camera restart report
 
